@@ -94,7 +94,3 @@ npm test
 # Run linter
 npm run lint
 ```
-
-## License
-
-MIT

@@ -88,8 +88,4 @@ export class SecureClient {
       measurement: attestationResponse.measurement,
     };
   }
-}
-
-const tinfoil = new TinfoilClient();
-
- 
+} 
