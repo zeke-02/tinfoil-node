@@ -1,0 +1,4 @@
+.idea/
+verifier
+node_modules/
+.env
