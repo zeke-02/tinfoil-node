@@ -38,15 +38,6 @@ export interface GroundTruth {
 }
 
 /**
- * Response structure from the verification process
- * @internal
- */
-interface VerificationResponse {
-  certFingerprint: string;
-  measurement: string;
-}
-
-/**
  * SecureClient handles verification of code and runtime measurements using WebAssembly.
  * The WASM module is compiled from Go code (github.com/tinfoilsh/verifier) and provides
  * cryptographic verification capabilities.

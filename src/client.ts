@@ -67,6 +67,9 @@ export class TinfoilClient {
       throw new Error(`Failed to verify enclave: ${error}`);
     }
 
+    // Convert the expected fingerprint to hex string for comparison
+    const expectedFingerprint = Buffer.from(this.groundTruth.certFingerprint).toString('hex');
+
     // Create a custom HTTPS agent that verifies certificate fingerprints
     const httpsAgent = new https.Agent({
       rejectUnauthorized: true,
@@ -75,11 +78,11 @@ export class TinfoilClient {
           throw new Error('No certificate found');
         }
 
-        // Calculate the SHA-256 fingerprint of the certificate
-        const certFingerprint = createHash('sha256').update(cert.raw).digest();
+        // Calculate the SHA-256 fingerprint of the certificate and convert to hex
+        const certFingerprint = createHash('sha256').update(cert.raw).digest('hex');
 
-        // Compare with the expected fingerprint from attestation
-        if (!this.groundTruth || !Buffer.from(this.groundTruth.certFingerprint).equals(certFingerprint)) {
+        // Compare hex strings
+        if (certFingerprint !== expectedFingerprint) {
           throw new Error('Certificate fingerprint mismatch');
         }
 
