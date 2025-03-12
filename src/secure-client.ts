@@ -1,36 +1,71 @@
 import fetch from 'node-fetch';
-import { TinfoilClient } from './client';
 import { TextEncoder, TextDecoder } from 'util';
-import crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 
-// These globals are required for the Go WASM runtime (wasm-exec.js)
-// While browsers provide these by default, Node.js needs explicit assignment
-// They're used for string encoding/decoding between JavaScript and WebAssembly memory
+// Set up browser-like globals that the Go WASM runtime expects
 const globalThis = global as any;
-globalThis.crypto = {
-  getRandomValues: (arr: Uint8Array) => {
-    return crypto.randomFillSync(arr);
-  }
-};
+
+// Performance API
 globalThis.performance = {
-  now: () => Date.now()
+  now: () => Date.now(),
+  markResourceTiming: () => {},
+  mark: () => {},
+  measure: () => {},
+  clearMarks: () => {},
+  clearMeasures: () => {},
+  getEntriesByName: () => [],
+  getEntriesByType: () => [],
+  getEntries: () => []
 };
+
+// Text encoding
 globalThis.TextEncoder = TextEncoder;
 globalThis.TextDecoder = TextDecoder;
 
-// wasm-exec.js is a required Go runtime helper that sets up the JavaScript environment
-// for running Go-compiled WebAssembly code. It provides necessary bindings and utilities
-// that bridge the gap between Go's runtime expectations and the JavaScript environment.
-// This file is provided by the Go project and should be kept in sync with your Go version.
-// 
-// TODO: maybe this should be fetched directly from go? However, this could 
-// potentially cause breaking issues if the Go version is not compatible and 
-// open up a security vulnerability (we'd need to also trust the Go source in perpetuity).
-// 'https://raw.githubusercontent.com/golang/go/master/misc/wasm/wasm_exec.js';
+// Crypto API (needed by Go WASM)
+if (!globalThis.crypto) {
+  globalThis.crypto = {
+    getRandomValues: (buffer: Uint8Array) => {
+      const randomBytes = require('crypto').randomBytes(buffer.length);
+      buffer.set(new Uint8Array(randomBytes));
+      return buffer;
+    }
+  };
+}
+
+// Additional browser polyfills that might be needed
+globalThis.window = globalThis;
+globalThis.document = { 
+  createElement: () => ({ 
+    setAttribute: () => {} 
+  }) 
+};
+
+// Force process to stay running (prevent Go from exiting Node process)
+// This is a common issue with Go WASM in Node - it calls process.exit()
+const originalExit = process.exit;
+process.exit = ((code?: number) => {
+  console.log(`Process exit called with code ${code} - ignoring to keep Node.js process alive`);
+  return undefined as never;
+}) as any;
+
+// Type declarations for the functions exported by the Go WASM module
+declare global {
+  var Go: any;
+  var verifyEnclave: (enclaveHostname: string) => Promise<{
+    certificate: string;
+    measurement: string;
+    certFingerprint: string;
+  }>;
+  var verifyCode: (repo: string, digest: string) => Promise<string>;
+}
+
+// Load the Go runtime helper
 require('./wasm-exec.js');
 
 /**
- * Represents the ground truth measurements used for verification
+ * Ground truth measurements from verification
  */
 export interface GroundTruth {
   certFingerprint: Uint8Array;
@@ -38,13 +73,13 @@ export interface GroundTruth {
 }
 
 /**
- * SecureClient handles verification of code and runtime measurements using WebAssembly.
- * The WASM module is compiled from Go code (github.com/tinfoilsh/verifier) and provides
- * cryptographic verification capabilities.
+ * SecureClient handles verification of code and runtime measurements using WebAssembly
  */
 export class SecureClient {
   private enclave: string;
   private repo: string;
+  private goInstance: any = null;
+  private isInitialized: boolean = false;
 
   constructor(enclave: string, repo: string) {
     this.enclave = enclave;
@@ -52,40 +87,102 @@ export class SecureClient {
   }
 
   /**
-   * Verifies the integrity of both the code and runtime environment.
-   * 
-   * This process:
-   * 1. Loads the WASM verifier (compiled from Go) hosted on GitHub
-   * 2. Instantiates the WASM module with required imports
-   * 3. Verifies the code measurement against the repository
-   * 4. Verifies the enclave attestation
-   * 5. Ensures measurements match between code and attestation
-   * 
-   * @returns {Promise<GroundTruth>} The verification results including certificate fingerprint and measurement
-   * @throws {Error} If measurements don't match between code and attestation
+   * Initialize the WASM module
+   * This must be called before verify() to load the WASM module
    */
-  public async verify(): Promise<GroundTruth> {
-    // Load the WebAssembly module from GitHub - this is the compiled Go verifier
-    const wasmResponse = await fetch('https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm');
-    const wasmBuffer = await wasmResponse.arrayBuffer();
-    
-    // Initialize the Go WASM runtime
-    const go = new globalThis.Go();
-    const wasmInstance = await WebAssembly.instantiate(wasmBuffer, go.importObject);
-    await go.run(wasmInstance.instance);
-
-    // verifyCode and verifyEnclave are functions exported from the Go WASM module
-    const measurement = await globalThis.verifyCode(this.repo);
-    const attestationResponse = await globalThis.verifyEnclave(this.enclave);
-
-    // Verify measurements match
-    if (measurement !== attestationResponse.measurement) {
-      throw new Error('Measurements do not match');
+  public async initialize(): Promise<void> {
+    if (this.isInitialized) {
+      return;
     }
 
-    return {
-      certFingerprint: new Uint8Array(Buffer.from(attestationResponse.certFingerprint, 'base64')),
-      measurement: attestationResponse.measurement,
-    };
+    try {
+      this.goInstance = new globalThis.Go();
+      
+      const wasmResponse = await fetch('https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm');
+      const wasmBuffer = await wasmResponse.arrayBuffer();
+      
+      const result = await WebAssembly.instantiate(wasmBuffer, this.goInstance.importObject);
+      const runPromise = this.goInstance.run(result.instance);
+      
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      while (attempts < maxAttempts) {
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const hasVerifyCode = typeof globalThis.verifyCode === 'function';
+        const hasVerifyEnclave = typeof globalThis.verifyEnclave === 'function';
+        
+        if (hasVerifyCode && hasVerifyEnclave) {
+          this.isInitialized = true;
+          return;
+        }
+      }
+      
+      throw new Error('WASM functions not exposed after multiple attempts');
+    } catch (error) {
+      console.error('WASM initialization error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verifies the integrity of both the code and runtime environment
+   */
+  public async verify(): Promise<GroundTruth> {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+    
+    try {
+      if (typeof globalThis.verifyCode !== 'function' || typeof globalThis.verifyEnclave !== 'function') {
+        throw new Error('WASM functions not available');
+      }
+
+      const releaseResponse = await fetch(`https://api.github.com/repos/${this.repo}/releases/latest`, {
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'tinfoil-node-client'
+        }
+      });
+      
+      if (!releaseResponse.ok) {
+        throw new Error(`GitHub API request failed: ${releaseResponse.status} ${releaseResponse.statusText}`);
+      }
+      
+      const releaseData = await releaseResponse.json();
+      
+      const eifRegex = /EIF hash: ([a-f0-9]{64})/i;
+      const digestRegex = /Digest: `([a-f0-9]{64})`/;
+      
+      let digest;
+      const eifMatch = releaseData.body?.match(eifRegex);
+      const digestMatch = releaseData.body?.match(digestRegex);
+      
+      if (eifMatch) {
+        digest = eifMatch[1];
+      } else if (digestMatch) {
+        digest = digestMatch[1];
+      } else {
+        throw new Error('Could not find digest in release notes');
+      }
+      
+      const [measurement, attestationResponse] = await Promise.all([
+        globalThis.verifyCode(this.repo, digest),
+        globalThis.verifyEnclave(this.enclave)
+      ]);
+      
+      if (measurement !== attestationResponse.measurement) {
+        throw new Error('Measurements do not match');
+      }
+      
+      return {
+        certFingerprint: new Uint8Array(Buffer.from(attestationResponse.certificate, 'hex')),
+        measurement: attestationResponse.measurement,
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 } 

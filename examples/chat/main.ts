@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import { TinfoilClient } from '../../src';
 import { config } from 'dotenv';
 
 /**
@@ -17,7 +17,7 @@ const DEFAULT_REPO = 'tinfoilsh/default-models-nitro';
 process.env.TINFOIL_ENCLAVE = process.env.TINFOIL_ENCLAVE || DEFAULT_ENCLAVE;
 process.env.TINFOIL_REPO = process.env.TINFOIL_REPO || DEFAULT_REPO;
 
-async function runStreamingExample(client: OpenAI) {
+async function runStreamingExample(client: TinfoilClient) {
     console.log('\n=== Streaming Chat Completion ===');
     
     const messages = [
@@ -32,6 +32,19 @@ async function runStreamingExample(client: OpenAI) {
     });
 
     try {
+        // Make sure client is ready before using
+        try {
+            await client.ready();
+            console.log('Client initialization successful!');
+        } catch (initError) {
+            console.error('Client initialization failed:', initError);
+            if (initError instanceof Error) {
+                console.error('Initialization stack:', initError.stack);
+            }
+            throw initError;
+        }
+
+        console.log('Creating chat completion stream...');
         const stream = await client.chat.completions.create({
             model: 'llama3.2:1b',
             messages: messages,
@@ -44,26 +57,45 @@ async function runStreamingExample(client: OpenAI) {
         for await (const chunk of stream) {
             const content = chunk.choices[0]?.delta?.content || '';
             fullResponse += content;
-            process.stdout.write(content); // Print content as it arrives
+            process.stdout.write(content);
         }
 
         console.log('\n\nFull accumulated response:');
         console.log(fullResponse);
     } catch (error) {
         console.error('Stream error:', error);
+        if (error instanceof Error) {
+            console.error('Full error stack:', error.stack);
+        }
+        // Log any additional error properties
+        console.error('Error details:', JSON.stringify(error, null, 2));
     }
 }
 
 async function main() {
-    // Create a new OpenAI client with Tinfoil configuration
-    const client = new OpenAI({
-        apiKey: 'tinfoil', // Replace with your actual API key
-        baseURL: `https://${process.env.TINFOIL_ENCLAVE}/v1`,
-    });
+    try {
+        console.log('Environment configuration:');
+        console.log('TINFOIL_ENCLAVE:', process.env.TINFOIL_ENCLAVE);
+        console.log('TINFOIL_REPO:', process.env.TINFOIL_REPO);
 
-    // Run streaming example
-    await runStreamingExample(client);
+        // Create a new TinfoilClient
+        const client = new TinfoilClient({
+            apiKey: 'tinfoil' // Replace with your actual API key
+        });
+
+        // Run streaming example
+        await runStreamingExample(client);
+    } catch (error) {
+        console.error('Main error:', error);
+        if (error instanceof Error) {
+            console.error('Main error stack:', error.stack);
+        }
+        throw error;
+    }
 }
 
 // Run the example
-main().catch(console.error); 
+main().catch(error => {
+    console.error('Top level error:', error);
+    process.exit(1);
+}); 

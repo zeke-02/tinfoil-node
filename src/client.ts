@@ -18,6 +18,7 @@ export class TinfoilClient {
   private enclave: string;
   private repo: string;
   private groundTruth?: GroundTruth;
+  private clientPromise: Promise<OpenAI>;
 
   /**
    * Creates a new TinfoilClient instance using environment variables.
@@ -40,7 +41,7 @@ export class TinfoilClient {
     if (typeof enclaveOrOptions === 'string' && typeof repoOrNothing === 'string') {
       this.enclave = enclaveOrOptions;
       this.repo = repoOrNothing;
-      this.initClient(options);
+      this.clientPromise = this.initClient(options);
     } else {
       this.enclave = process.env.TINFOIL_ENCLAVE || '';
       this.repo = process.env.TINFOIL_REPO || '';
@@ -49,12 +50,20 @@ export class TinfoilClient {
         throw new Error('tinfoil: TINFOIL_ENCLAVE and TINFOIL_REPO environment variables must be specified');
       }
 
-      this.initClient(enclaveOrOptions as ConstructorParameters<typeof OpenAI>[0]);
+      this.clientPromise = this.initClient(enclaveOrOptions as ConstructorParameters<typeof OpenAI>[0]);
     }
   }
 
-  private async initClient(options?: Partial<Omit<ConstructorParameters<typeof OpenAI>[0], 'baseURL'>>) {
-    this.client = await this.createOpenAIClient(options);
+  /**
+   * Ensures the client is ready to use.
+   * @returns Promise that resolves when the client is initialized
+   */
+  public async ready(): Promise<void> {
+    this.client = await this.clientPromise;
+  }
+
+  private async initClient(options?: Partial<Omit<ConstructorParameters<typeof OpenAI>[0], 'baseURL'>>): Promise<OpenAI> {
+    return this.createOpenAIClient(options);
   }
 
   private async createOpenAIClient(options: Partial<Omit<ConstructorParameters<typeof OpenAI>[0], 'baseURL'>> = {}): Promise<OpenAI> {
