@@ -32,18 +32,6 @@ async function runStreamingExample(client: TinfoilClient) {
     });
 
     try {
-        // Make sure client is ready before using
-        try {
-            await client.ready();
-            console.log('Client initialization successful!');
-        } catch (initError) {
-            console.error('Client initialization failed:', initError);
-            if (initError instanceof Error) {
-                console.error('Initialization stack:', initError.stack);
-            }
-            throw initError;
-        }
-
         console.log('Creating chat completion stream...');
         const stream = await client.chat.completions.create({
             model: 'llama3.2:1b',

@@ -1,8 +1,60 @@
 import OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
+import type { 
+  Chat,
+  Files,
+  FineTuning,
+  Images,
+  Audio,
+  Embeddings,
+  Models,
+  Moderations,
+  Beta
+} from 'openai/resources';
 import { createHash } from 'crypto';
 import { SecureClient, GroundTruth } from './secure-client';
 import https from 'https';
+
+/**
+ * Creates a proxy that allows property access and method calls on a Promise before it resolves.
+ * This enables a more ergonomic API where you can chain properties and methods without explicitly
+ * awaiting the promise first.
+ * 
+ * @param promise - A Promise that will resolve to an object
+ * @returns A proxied version of the promised object that allows immediate property/method access
+ * 
+ * @example
+ * // Instead of:
+ * const client = await getClient();
+ * const result = await client.someProperty.someMethod();
+ * 
+ * // You can write:
+ * const client = createAsyncProxy(getClient());
+ * const result = await client.someProperty.someMethod();
+ * 
+ * @template T - The type of object that the promise resolves to
+ */
+function createAsyncProxy<T extends object>(promise: Promise<T>): T {
+  return new Proxy({} as T, {
+    get(target, prop) {
+      return new Proxy(() => {}, {
+        get(_, nestedProp) {
+          return (...args: any[]) =>
+            promise.then(obj => {
+              const value = (obj as any)[prop][nestedProp];
+              return typeof value === 'function' ? value.apply((obj as any)[prop], args) : value;
+            });
+        },
+        apply(_, __, args) {
+          return promise.then(obj => {
+            const value = (obj as any)[prop];
+            return typeof value === 'function' ? value.apply(obj, args) : value;
+          });
+        }
+      });
+    }
+  });
+}
 
 /**
  * TinfoilClient is a secure wrapper around the OpenAI API client that adds additional
@@ -14,11 +66,12 @@ import https from 'https';
  * - Type-safe access to OpenAI's chat completion APIs
  */
 export class TinfoilClient {
-  private client!: OpenAI;
+  private client?: OpenAI;
   private enclave: string;
   private repo: string;
   private groundTruth?: GroundTruth;
   private clientPromise: Promise<OpenAI>;
+  private readyPromise?: Promise<void>;
 
   /**
    * Creates a new TinfoilClient instance using environment variables.
@@ -59,7 +112,12 @@ export class TinfoilClient {
    * @returns Promise that resolves when the client is initialized
    */
   public async ready(): Promise<void> {
-    this.client = await this.clientPromise;
+    if (!this.readyPromise) {
+      this.readyPromise = (async () => {
+        this.client = await this.clientPromise;
+      })();
+    }
+    return this.readyPromise;
   }
 
   private async initClient(options?: Partial<Omit<ConstructorParameters<typeof OpenAI>[0], 'baseURL'>>): Promise<OpenAI> {
@@ -105,5 +163,89 @@ export class TinfoilClient {
       baseURL: `https://${this.enclave}/v1/`,
       httpAgent: httpsAgent,
     });
+  }
+
+  /**
+   * Helper method to ensure the OpenAI client is initialized before use.
+   * Automatically calls ready() if needed.
+   * @returns The initialized OpenAI client
+   * @private
+   */
+  private async ensureReady(): Promise<OpenAI> {
+    await this.ready();
+    // We can safely assert this now because ready() must have completed
+    return this.client!;
+  }
+
+  /**
+   * Access to OpenAI's chat completions API for creating chat conversations.
+   * Automatically initializes the client if needed.
+   */
+  get chat(): Chat {
+    return createAsyncProxy(this.ensureReady().then(client => client.chat));
+  }
+
+  /**
+   * Access to OpenAI's files API for managing files used with the API.
+   * Automatically initializes the client if needed.
+   */
+  get files(): Files {
+    return createAsyncProxy(this.ensureReady().then(client => client.files));
+  }
+
+  /**
+   * Access to OpenAI's fine-tuning API for creating and managing fine-tuned models.
+   * Automatically initializes the client if needed.
+   */
+  get fineTuning(): FineTuning {
+    return createAsyncProxy(this.ensureReady().then(client => client.fineTuning));
+  }
+
+  /**
+   * Access to OpenAI's image generation and editing API.
+   * Automatically initializes the client if needed.
+   */
+  get images(): Images {
+    return createAsyncProxy(this.ensureReady().then(client => client.images));
+  }
+
+  /**
+   * Access to OpenAI's audio API for speech-to-text and text-to-speech.
+   * Automatically initializes the client if needed.
+   */
+  get audio(): Audio {
+    return createAsyncProxy(this.ensureReady().then(client => client.audio));
+  }
+
+  /**
+   * Access to OpenAI's embeddings API for creating vector embeddings of text.
+   * Automatically initializes the client if needed.
+   */
+  get embeddings(): Embeddings {
+    return createAsyncProxy(this.ensureReady().then(client => client.embeddings));
+  }
+
+  /**
+   * Access to OpenAI's models API for listing and managing available models.
+   * Automatically initializes the client if needed.
+   */
+  get models(): Models {
+    return createAsyncProxy(this.ensureReady().then(client => client.models));
+  }
+
+  /**
+   * Access to OpenAI's content moderation API.
+   * Automatically initializes the client if needed.
+   */
+  get moderations(): Moderations {
+    return createAsyncProxy(this.ensureReady().then(client => client.moderations));
+  }
+
+  /**
+   * Access to OpenAI's beta features.
+   * Automatically initializes the client if needed.
+   */
+  get beta(): Beta {
+    return createAsyncProxy(this.ensureReady().then(client => client.beta));
   }
 } 
