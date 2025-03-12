@@ -78,8 +78,8 @@ export interface GroundTruth {
 export class SecureClient {
   private enclave: string;
   private repo: string;
-  private goInstance: any = null;
-  private isInitialized: boolean = false;
+  private static goInstance: any = null;
+  private static initializationPromise: Promise<void> | null = null;
 
   constructor(enclave: string, repo: string) {
     this.enclave = enclave;
@@ -87,53 +87,62 @@ export class SecureClient {
   }
 
   /**
-   * Initialize the WASM module
-   * This must be called before verify() to load the WASM module
+   * Static method to initialize WASM module
+   * This starts automatically when the class is loaded
    */
-  public async initialize(): Promise<void> {
-    if (this.isInitialized) {
-      return;
+  public static async initializeWasm(): Promise<void> {
+    if (SecureClient.initializationPromise) {
+      return SecureClient.initializationPromise;
     }
 
-    try {
-      this.goInstance = new globalThis.Go();
-      
-      const wasmResponse = await fetch('https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm');
-      const wasmBuffer = await wasmResponse.arrayBuffer();
-      
-      const result = await WebAssembly.instantiate(wasmBuffer, this.goInstance.importObject);
-      const runPromise = this.goInstance.run(result.instance);
-      
-      let attempts = 0;
-      const maxAttempts = 10;
-      
-      while (attempts < maxAttempts) {
-        attempts++;
-        await new Promise(resolve => setTimeout(resolve, 100));
+    SecureClient.initializationPromise = (async () => {
+      try {
+        SecureClient.goInstance = new globalThis.Go();
         
-        const hasVerifyCode = typeof globalThis.verifyCode === 'function';
-        const hasVerifyEnclave = typeof globalThis.verifyEnclave === 'function';
+        const wasmResponse = await fetch('https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm');
+        const wasmBuffer = await wasmResponse.arrayBuffer();
         
-        if (hasVerifyCode && hasVerifyEnclave) {
-          this.isInitialized = true;
-          return;
+        const result = await WebAssembly.instantiate(wasmBuffer, SecureClient.goInstance.importObject);
+        const runPromise = SecureClient.goInstance.run(result.instance);
+        
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        while (attempts < maxAttempts) {
+          attempts++;
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          const hasVerifyCode = typeof globalThis.verifyCode === 'function';
+          const hasVerifyEnclave = typeof globalThis.verifyEnclave === 'function';
+          
+          if (hasVerifyCode && hasVerifyEnclave) {
+            return;
+          }
         }
+        
+        throw new Error('WASM functions not exposed after multiple attempts');
+      } catch (error) {
+        console.error('WASM initialization error:', error);
+        throw error;
       }
-      
-      throw new Error('WASM functions not exposed after multiple attempts');
-    } catch (error) {
-      console.error('WASM initialization error:', error);
-      throw error;
-    }
+    })();
+
+    return SecureClient.initializationPromise;
+  }
+
+  /**
+   * Initialize the WASM module
+   * Now just waits for the static initialization to complete
+   */
+  public async initialize(): Promise<void> {
+    await SecureClient.initializeWasm();
   }
 
   /**
    * Verifies the integrity of both the code and runtime environment
    */
   public async verify(): Promise<GroundTruth> {
-    if (!this.isInitialized) {
-      await this.initialize();
-    }
+    await this.initialize();
     
     try {
       if (typeof globalThis.verifyCode !== 'function' || typeof globalThis.verifyEnclave !== 'function') {
@@ -185,4 +194,7 @@ export class SecureClient {
       throw error;
     }
   }
-} 
+}
+
+// Start initialization as soon as the module loads
+SecureClient.initializeWasm().catch(console.error); 
