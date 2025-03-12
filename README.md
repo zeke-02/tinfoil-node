@@ -54,14 +54,6 @@ npx ts-node examples/chat/main.ts
 
 The example demonstrates streaming chat completions with the Tinfoil API wrapper.
 
-## Security Features
-
-- Enclave attestation verification
-
-- Certificate fingerprint validation
-
-- Secure communication channel
-
 ## Runtime Support
 
 Supports Node.js 18+, Deno, Bun, Cloudflare Workers, and more. Browser usage is disabled by default for security. See [OpenAI Node.js client](https://github.com/openai/openai-node) for complete runtime compatibility.
