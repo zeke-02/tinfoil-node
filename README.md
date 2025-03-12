@@ -26,6 +26,34 @@ const completion = await client.chat.completions.create({
 });
 ```
 
+## Running the Chat Example
+
+To run the streaming chat example:
+
+1. Clone the repository
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Optionally create a `.env` file with your configuration:
+
+```bash
+TINFOIL_ENCLAVE=models.default.tinfoil.sh
+TINFOIL_REPO=tinfoilsh/default-models-nitro
+OPENAI_API_KEY=your_api_key
+```
+
+4. Run the example:
+
+```bash
+npx ts-node examples/chat/main.ts
+```
+
+The example demonstrates streaming chat completions with the Tinfoil API wrapper.
+
 ## Security Features
 
 - Enclave attestation verification
