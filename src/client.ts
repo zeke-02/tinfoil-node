@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import type { Stream } from 'openai/streaming';
 import type { 
   Chat,
   Files,
@@ -57,11 +56,11 @@ function createAsyncProxy<T extends object>(promise: Promise<T>): T {
 }
 
 /**
- * TinfoilClient is a secure wrapper around the OpenAI API client that adds additional
+ * TinfoilClient is a wrapper around the OpenAI API client that adds additional
  * security measures through enclave verification and certificate fingerprint validation.
  * 
  * It provides:
- * - Automatic verification of secure enclaves
+ * - Automatic verification of Tinfoil secure enclaves
  * - Certificate fingerprint validation for each request
  * - Type-safe access to OpenAI's chat completion APIs
  */
