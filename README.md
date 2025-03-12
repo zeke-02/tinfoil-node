@@ -1,5 +1,8 @@
 # Tinfoil
 
+[![Build Status](https://github.com/tinfoilsh/tinfoil-node/actions/workflows/test.yml/badge.svg)](https://github.com/tinfoilsh/tinfoil-node/actions)
+[![NPM version](https://img.shields.io/npm/v/tinfoil.svg)](https://npmjs.org/package/tinfoil)
+
 A Node.js wrapper around the OpenAI client that verifies enclave attestation and certificate fingerprints when using Tinfoil inference.
 
 ## Installation
@@ -11,9 +14,9 @@ npm install tinfoil
 ## Quick Start
 
 ```typescript
-import { TinfoilClient } from 'tinfoil';
+import { TinfoilAI } from 'tinfoil';
 
-const client = new TinfoilClient({
+const client = new TinfoilAI({
   enclave: 'models.default.tinfoil.sh',  // or use TINFOIL_ENCLAVE env var
   repo: 'tinfoilsh/default-models-nitro', // or use TINFOIL_REPO env var
   apiKey: 'tinfoil'                 // or use OPENAI_API_KEY env var
@@ -54,14 +57,6 @@ npx ts-node examples/chat/main.ts
 
 The example demonstrates streaming chat completions with the Tinfoil API wrapper.
 
-## Security Features
-
-- Enclave attestation verification
-
-- Certificate fingerprint validation
-
-- Secure communication channel
-
 ## Runtime Support
 
 Supports Node.js 18+, Deno, Bun, Cloudflare Workers, and more. Browser usage is disabled by default for security. See [OpenAI Node.js client](https://github.com/openai/openai-node) for complete runtime compatibility.
@@ -69,3 +64,14 @@ Supports Node.js 18+, Deno, Bun, Cloudflare Workers, and more. Browser usage is 
 ## API Documentation
 
 This library is a drop-in replacement for the official OpenAI Node.js client that can be used with Tinfoil. All methods and types are identical. See the [OpenAI client](https://github.com/openai/openai-node) for complete API usage and documentation.
+
+
+## Reporting Vulnerabilities
+
+Please report security vulnerabilities by either:
+
+- Emailing [security@tinfoil.sh](mailto:security@tinfoil.sh)
+
+- Opening an issue on GitHub on this repository
+
+We aim to respond to security reports within 24 hours and will keep you updated on our progress.

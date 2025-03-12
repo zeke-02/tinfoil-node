@@ -1,4 +1,4 @@
-import { TinfoilClient } from '../../src';
+import { TinfoilAI } from '../../src';
 import { config } from 'dotenv';
 
 /**
@@ -17,7 +17,7 @@ const DEFAULT_REPO = 'tinfoilsh/default-models-nitro';
 process.env.TINFOIL_ENCLAVE = process.env.TINFOIL_ENCLAVE || DEFAULT_ENCLAVE;
 process.env.TINFOIL_REPO = process.env.TINFOIL_REPO || DEFAULT_REPO;
 
-async function runStreamingExample(client: TinfoilClient) {
+async function runStreamingExample(client: TinfoilAI) {
     console.log('\n=== Streaming Chat Completion ===');
     
     const messages = [
@@ -66,8 +66,8 @@ async function main() {
         console.log('TINFOIL_ENCLAVE:', process.env.TINFOIL_ENCLAVE);
         console.log('TINFOIL_REPO:', process.env.TINFOIL_REPO);
 
-        // Create a new TinfoilClient
-        const client = new TinfoilClient({
+        // Create a new TinfoilAI
+        const client = new TinfoilAI({
             apiKey: 'tinfoil' // Replace with your actual API key
         });
 

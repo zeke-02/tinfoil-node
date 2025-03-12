@@ -1,4 +1,4 @@
-import { TinfoilClient } from '../client';
+import { TinfoilAI } from '../client';
 import '@jest/globals';
 
 // Test configuration with defaults
@@ -16,7 +16,7 @@ const testConfig: TestConfig = {
   repo: getEnvOrDefault('TINFOIL_TEST_REPO', 'tinfoilsh/default-models-nitro'),
 };
 
-describe('TinfoilClient', () => {
+describe('TinfoilAI', () => {
   beforeEach(() => {
     process.env.TINFOIL_ENCLAVE = testConfig.enclave;
     process.env.TINFOIL_REPO = testConfig.repo;
@@ -28,7 +28,7 @@ describe('TinfoilClient', () => {
   });
 
   it('should create a client with environment variables', async () => {
-    const client = new TinfoilClient({
+    const client = new TinfoilAI({
       apiKey: 'tinfoil'
     });
     await client.ready();
@@ -39,13 +39,13 @@ describe('TinfoilClient', () => {
     delete process.env.TINFOIL_ENCLAVE;
     delete process.env.TINFOIL_REPO;
     
-    expect(() => new TinfoilClient({
+    expect(() => new TinfoilAI({
       apiKey: 'tinfoil'
     })).toThrow('tinfoil: TINFOIL_ENCLAVE and TINFOIL_REPO environment variables must be specified');
   });
 
   it('should perform non-streaming chat completion', async () => {
-    const client = new TinfoilClient({
+    const client = new TinfoilAI({
       apiKey: 'tinfoil'
     });
 
@@ -64,7 +64,7 @@ describe('TinfoilClient', () => {
   }, 60000);
 
   it('should handle streaming chat completion', async () => {
-    const client = new TinfoilClient({
+    const client = new TinfoilAI({
       apiKey: 'tinfoil'
     });
 
