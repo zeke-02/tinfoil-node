@@ -1,6 +1,6 @@
 # Tinfoil
 
-A secure OpenAI client wrapper for Node.js that verifies enclave attestation and certificate fingerprints.
+A Node.js wrapper around the OpenAI client that verifies enclave attestation and certificate fingerprints when using Tinfoil inference.
 
 ## Installation
 
@@ -8,89 +8,36 @@ A secure OpenAI client wrapper for Node.js that verifies enclave attestation and
 npm install tinfoil
 ```
 
-## Usage
-
-### Basic Usage
+## Quick Start
 
 ```typescript
 import { TinfoilClient } from 'tinfoil';
 
-// Create a client using environment variables
-// TINFOIL_ENCLAVE and TINFOIL_REPO must be set
-const client = new TinfoilClient();
-
-// Or create a client with explicit parameters
 const client = new TinfoilClient({
-  enclave: 'models.default.tinfoil.sh',
-  repo: 'tinfoilsh/default-models-nitro',
+  enclave: 'models.default.tinfoil.sh',  // or use TINFOIL_ENCLAVE env var
+  repo: 'tinfoilsh/default-models-nitro', // or use TINFOIL_REPO env var
+  apiKey: 'tinfoil'                 // or use OPENAI_API_KEY env var
 });
 
-// Make a chat completion request
-const completion = await client.createChatCompletion({
-  messages: [
-    { role: 'system', content: 'You are a helpful assistant.' },
-    { role: 'user', content: 'Why is tinfoil now called aluminum foil?' }
-  ],
-  model: 'gpt-4',
+// Uses identical method calls as the OpenAI client
+const completion = await client.chat.completions.create({
+  messages: [{ role: 'user', content: 'Hello!' }],
+  model: 'llama3.2:1b'
 });
-
-console.log(completion.choices[0].message.content);
 ```
 
-### Streaming Usage
+## Security Features
 
-```typescript
-import { TinfoilClient } from 'tinfoil';
+- Enclave attestation verification
 
-const client = new TinfoilClient();
+- Certificate fingerprint validation
 
-const stream = await client.createChatCompletionStream({
-  messages: [
-    { role: 'system', content: 'You are a helpful assistant.' },
-    { role: 'user', content: 'Why is tinfoil now called aluminum foil?' }
-  ],
-  model: 'gpt-4',
-});
+- Secure communication channel
 
-for await (const chunk of stream) {
-  process.stdout.write(chunk.choices[0]?.delta?.content || '');
-}
-```
+## Runtime Support
 
-### Advanced Usage
+Supports Node.js 18+, Deno, Bun, Cloudflare Workers, and more. Browser usage is disabled by default for security. See [OpenAI Node.js client](https://github.com/openai/openai-node) for complete runtime compatibility.
 
-You can access the underlying OpenAI client directly if needed:
+## API Documentation
 
-```typescript
-const openaiClient = client.openai;
-```
-
-## Environment Variables
-
-- `TINFOIL_ENCLAVE`: The enclave endpoint (e.g., 'models.default.tinfoil.sh')
-- `TINFOIL_REPO`: The repository containing the model (e.g., 'tinfoilsh/default-models-nitro')
-- `OPENAI_API_KEY`: Your OpenAI API key
-
-## Security
-
-This client adds an additional layer of security by:
-
-1. Verifying the enclave attestation
-2. Checking certificate fingerprints
-3. Ensuring secure communication with the model
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-
-# Run tests
-npm test
-
-# Run linter
-npm run lint
-```
+This library is a drop-in replacement for the official OpenAI Node.js client that can be used with Tinfoil. All methods and types are identical. See the [OpenAI client](https://github.com/openai/openai-node) for complete API usage and documentation.
