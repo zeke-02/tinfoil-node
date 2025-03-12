@@ -1,5 +1,9 @@
 # Tinfoil
 
+[![Build Status](https://github.com/tinfoilsh/tinfoil-node/actions/workflows/test.yml/badge.svg)](https://github.com/tinfoilsh/tinfoil-node/actions)
+[![NPM version](https://img.shields.io/npm/v/tinfoil.svg)](https://npmjs.org/package/tinfoil)
+![npm bundle size](https://img.shields.io/bundlephobia/minzip/tinfoil)
+
 A Node.js wrapper around the OpenAI client that verifies enclave attestation and certificate fingerprints when using Tinfoil inference.
 
 ## Installation
@@ -11,9 +15,9 @@ npm install tinfoil
 ## Quick Start
 
 ```typescript
-import { TinfoilClient } from 'tinfoil';
+import { TinfoilAI } from 'tinfoil';
 
-const client = new TinfoilClient({
+const client = new TinfoilAI({
   enclave: 'models.default.tinfoil.sh',  // or use TINFOIL_ENCLAVE env var
   repo: 'tinfoilsh/default-models-nitro', // or use TINFOIL_REPO env var
   apiKey: 'tinfoil'                 // or use OPENAI_API_KEY env var

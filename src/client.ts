@@ -56,7 +56,7 @@ function createAsyncProxy<T extends object>(promise: Promise<T>): T {
 }
 
 /**
- * TinfoilClient is a wrapper around the OpenAI API client that adds additional
+ * TinfoilAI is a wrapper around the OpenAI API client that adds additional
  * security measures through enclave verification and certificate fingerprint validation.
  * 
  * It provides:
@@ -64,7 +64,7 @@ function createAsyncProxy<T extends object>(promise: Promise<T>): T {
  * - Certificate fingerprint validation for each request
  * - Type-safe access to OpenAI's chat completion APIs
  */
-export class TinfoilClient {
+export class TinfoilAI {
   private client?: OpenAI;
   private enclave: string;
   private repo: string;
@@ -73,13 +73,13 @@ export class TinfoilClient {
   private readyPromise?: Promise<void>;
 
   /**
-   * Creates a new TinfoilClient instance using environment variables.
+   * Creates a new TinfoilAI instance using environment variables.
    * @param options - Optional OpenAI client configuration options
    * @throws Error if TINFOIL_ENCLAVE or TINFOIL_REPO environment variables are not set
    */
   constructor(options?: ConstructorParameters<typeof OpenAI>[0]);
   /**
-   * Creates a new TinfoilClient instance with explicit enclave and repo values.
+   * Creates a new TinfoilAI instance with explicit enclave and repo values.
    * @param enclave - The enclave URL/identifier
    * @param repo - The repository identifier
    * @param options - Optional OpenAI client configuration options
