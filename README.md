@@ -65,3 +65,14 @@ Supports Node.js 18+, Deno, Bun, Cloudflare Workers, and more. Browser usage is 
 ## API Documentation
 
 This library is a drop-in replacement for the official OpenAI Node.js client that can be used with Tinfoil. All methods and types are identical. See the [OpenAI client](https://github.com/openai/openai-node) for complete API usage and documentation.
+
+
+## Reporting Vulnerabilities
+
+Please report security vulnerabilities by either:
+
+- Emailing [security@tinfoil.sh](mailto:security@tinfoil.sh)
+
+- Opening an issue on GitHub on this repository
+
+We aim to respond to security reports within 24 hours and will keep you updated on our progress.
