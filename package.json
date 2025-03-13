@@ -1,14 +1,32 @@
 {
   "name": "tinfoil",
-  "version": "0.0.1",
+  "version": "0.1.4",
   "description": "Official Tinfoil secure OpenAI client wrapper",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "jest --config jest.config.cjs",
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src/**/*.ts",
+    "prepublishOnly": "npm run build"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tinfoilsh/tinfoil-node.git"
+  },
+  "keywords": [
+    "openai",
+    "security",
+    "AI",
+    "tinfoil"
+  ],
+  "author": "Tinfoil",
+  "license": "AGPL-3.0-or-later",
   "dependencies": {
     "dotenv": "^16.4.7",
     "node-fetch": "^2.7.0",
