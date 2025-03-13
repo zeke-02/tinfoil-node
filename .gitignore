@@ -2,3 +2,5 @@
 verifier
 node_modules/
 .env
+.npmrc
+dist/
