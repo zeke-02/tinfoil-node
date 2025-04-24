@@ -1,10 +1,10 @@
 declare global {
-    var Go: any;
-    var verifyEnclave: (enclaveHostname: string) => Promise<{
-        certificate: string;
-        measurement: string;
+    let Go: any;
+    let verifyEnclave: (enclaveHostname: string) => Promise<{
+        certificate: string; // This is incorrectly named now in the WASM binding. This contains the hex public key fingerprint.
+        publicKeyFP: string;
     }>;
-    var verifyCode: (repo: string, digest: string) => Promise<string>;
+    let verifyCode: (repo: string, digest: string) => Promise<string>;
 }
 
-export {}; 
+export {};

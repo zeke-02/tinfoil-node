@@ -10,9 +10,10 @@ import type {
   Moderations,
   Beta
 } from 'openai/resources';
-import { createHash } from 'crypto';
+import { createHash, X509Certificate } from 'crypto';
 import { SecureClient, GroundTruth } from './secure-client';
 import https from 'https';
+import { PeerCertificate } from 'tls';
 
 /**
  * Creates a proxy that allows property access and method calls on a Promise before it resolves.
@@ -133,23 +134,26 @@ export class TinfoilAI {
       throw new Error(`Failed to verify enclave: ${error}`);
     }
 
-    // Convert the expected fingerprint to hex string for comparison
-    const expectedFingerprint = Buffer.from(this.groundTruth.certFingerprint).toString('hex');
+    const expectedFingerprint = this.groundTruth.publicKeyFP;
 
     // Create a custom HTTPS agent that verifies certificate fingerprints
     const httpsAgent = new https.Agent({
       rejectUnauthorized: true,
-      checkServerIdentity: (host: string, cert: any) => {
+      checkServerIdentity: (host: string, cert: PeerCertificate) => {
         if (!cert || !cert.raw) {
           throw new Error('No certificate found');
         }
+        if (!cert.pubkey) {
+          throw new Error('No public key found');
+        }
 
-        // Calculate the SHA-256 fingerprint of the certificate and convert to hex
-        const certFingerprint = createHash('sha256').update(cert.raw).digest('hex');
+        const pemCert = `-----BEGIN CERTIFICATE-----\n${cert.raw.toString('base64')}\n-----END CERTIFICATE-----`;
+        const x509Cert = new X509Certificate(pemCert);
+        const publicKey = x509Cert.publicKey.export({ format: 'der', type: 'spki' });
+        const publicKeyHash = createHash('sha256').update(publicKey).digest('hex');
 
-        // Compare hex strings
-        if (certFingerprint !== expectedFingerprint) {
-          throw new Error('Certificate fingerprint mismatch');
+        if (publicKeyHash !== expectedFingerprint) {
+          throw new Error(`Certificate fingerprint mismatch. Got ${publicKeyHash}, expected ${expectedFingerprint}`);
         }
 
         return undefined; // Validation successful
