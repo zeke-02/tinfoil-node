@@ -1,31 +1,16 @@
 import { TinfoilAI } from '../../src';
 import { config } from 'dotenv';
 
-/**
- * This example demonstrates how to use the Tinfoil API wrapper with
- * streaming chat completions.
- */
-
-// Load environment variables from .env file if present
 config();
-
-// Default Tinfoil environment configuration
-const DEFAULT_ENCLAVE = 'models.default.tinfoil.sh';
-const DEFAULT_REPO = 'tinfoilsh/default-models-nitro';
-
-// Set up environment variables (you can also set these in your .env file)
-process.env.TINFOIL_ENCLAVE = process.env.TINFOIL_ENCLAVE || DEFAULT_ENCLAVE;
-process.env.TINFOIL_REPO = process.env.TINFOIL_REPO || DEFAULT_REPO;
+process.env.TINFOIL_ENCLAVE = process.env.TINFOIL_ENCLAVE || "llama3-3-70b.model.tinfoil.sh";
+process.env.TINFOIL_REPO = process.env.TINFOIL_REPO || "tinfoilsh/confidential-llama3-3-70b";
 
 async function runStreamingExample(client: TinfoilAI) {
-    console.log('\n=== Streaming Chat Completion ===');
-    
     const messages = [
         { role: 'system' as const, content: 'You are a helpful assistant.' },
         { role: 'user' as const, content: 'Tell me a short story about aluminum foil.' }
     ];
 
-    // Print the prompts
     console.log('\nPrompts:');
     messages.forEach(msg => {
         console.log(`${msg.role.toUpperCase()}: ${msg.content}`);
@@ -34,7 +19,7 @@ async function runStreamingExample(client: TinfoilAI) {
     try {
         console.log('Creating chat completion stream...');
         const stream = await client.chat.completions.create({
-            model: 'llama3.2:1b',
+            model: 'llama3-3-70b',
             messages: messages,
             stream: true,
         });
@@ -86,4 +71,4 @@ async function main() {
 main().catch(error => {
     console.error('Top level error:', error);
     process.exit(1);
-}); 
+});

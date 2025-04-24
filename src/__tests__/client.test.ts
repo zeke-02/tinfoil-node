@@ -12,8 +12,8 @@ const getEnvOrDefault = (key: string, defaultValue: string): string => {
 };
 
 const testConfig: TestConfig = {
-  enclave: getEnvOrDefault('TINFOIL_TEST_ENCLAVE', 'models.default.tinfoil.sh'),
-  repo: getEnvOrDefault('TINFOIL_TEST_REPO', 'tinfoilsh/default-models-nitro'),
+  enclave: getEnvOrDefault('TINFOIL_TEST_ENCLAVE', 'llama3-3-70b.model.tinfoil.sh'),
+  repo: getEnvOrDefault('TINFOIL_TEST_REPO', 'tinfoilsh/confidential-llama3-3-70b'),
 };
 
 describe('TinfoilAI', () => {
@@ -56,7 +56,7 @@ describe('TinfoilAI', () => {
         { role: 'system', content: 'No matter what the user says, only respond with: Done.' },
         { role: 'user', content: 'Is this a test?' }
       ],
-      model: 'llama3.2:1b'
+      model: 'llama3-3-70b'
     });
 
     console.log('Response received:', response.choices[0].message.content);
@@ -75,7 +75,7 @@ describe('TinfoilAI', () => {
         { role: 'system', content: 'No matter what the user says, only respond with: Done.' },
         { role: 'user', content: 'Is this a test?' }
       ],
-      model: 'llama3.2:1b',
+      model: 'llama3-3-70b',
       stream: true
     });
 
