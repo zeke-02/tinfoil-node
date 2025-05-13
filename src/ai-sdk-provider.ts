@@ -11,9 +11,10 @@ import { X509Certificate, createHash } from "node:crypto";
  * 
  * @param repo - The repository identifier
  * @param enclave - The enclave URL/identifier
+ * @param apiKey - The API key for the Tinfoil API
  * @returns A TinfoilAI instance
  */
-export async function createTinfoilAI(repo: string, enclave: string) {
+export async function createTinfoilAI(repo: string, enclave: string, apiKey: string) {
     const sc = new SecureClient(enclave, repo);
     const groundTruth = await sc.verify();
   
@@ -41,6 +42,7 @@ export async function createTinfoilAI(repo: string, enclave: string) {
     return createOpenAICompatible({
       name: "tinfoil",
       baseURL: `https://${enclave}/v1`,
+      apiKey: apiKey,
       fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
         if (!init) {
           init = {};
