@@ -99,9 +99,10 @@ describe('TinfoilAI', () => {
   it('should pass client verification with the AI SDK provider', async () => {
     const tinfoilai = await createTinfoilAI(
       "tinfoilsh/confidential-llama3-3-70b",
-      "llama3-3-70b.model.tinfoil.sh"
+      "llama3-3-70b.model.tinfoil.sh",
+      "tinfoil"
     );
-    
+
     const { textStream } = streamText({
         model: tinfoilai("llama3-3-70b"),
         prompt: "say hi to me"
