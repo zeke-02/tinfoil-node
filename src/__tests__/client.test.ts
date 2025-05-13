@@ -1,4 +1,6 @@
+import { streamText } from 'ai';
 import { TinfoilAI } from '../client';
+import { createTinfoilAI } from '../ai-sdk-provider';
 import '@jest/globals';
 
 // Test configuration with defaults
@@ -93,5 +95,21 @@ describe('TinfoilAI', () => {
     console.log('Complete response:', accumulatedContent);
     expect(accumulatedContent.length).toBeGreaterThan(0);
   }, 60000);
-});
 
+  it('should pass client verification with the AI SDK provider', async () => {
+    const tinfoilai = await createTinfoilAI(
+      "tinfoilsh/confidential-llama3-3-70b",
+      "llama3-3-70b.model.tinfoil.sh"
+    );
+    
+    const { textStream } = streamText({
+        model: tinfoilai("llama3-3-70b"),
+        prompt: "say hi to me"
+    });
+    
+    for await (const textPart of textStream) {
+        process.stdout.write(textPart);
+    }
+    console.log();
+  });  
+});
