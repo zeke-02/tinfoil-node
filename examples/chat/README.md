@@ -13,17 +13,18 @@ This example demonstrates how to use the Tinfoil client to interact with OpenAI'
    ```bash
    npm install dotenv openai ts-node typescript
    ```
-4. Set up your environment variables by copying the example file:
+4. Set up your API key environment variable:
    ```bash
-   cp .env.example .env
+   export OPENAI_API_KEY="your-api-key"
    ```
-   Then edit `.env` with your configuration:
+   Or create a `.env` file with:
    ```bash
-   TINFOIL_ENCLAVE="models.default.tinfoil.sh"
-   TINFOIL_REPO="tinfoilsh/default-models-nitro"
-   TINFOIL_API_KEY="your_api_key_here"
+   OPENAI_API_KEY="your-api-key"
    ```
-   Note: The example will use default values if environment variables are not set.
+   
+   Note: The enclave and repo are configured directly in the code for this example:
+   - Enclave: `llama3-3-70b.model.tinfoil.sh`
+   - Repo: `tinfoilsh/confidential-llama3-3-70b`
 
 ## Running the Example
 
@@ -36,8 +37,8 @@ npx ts-node main.ts
 
 The example will:
 
-1. Create an OpenAI client configured with Tinfoil settings
+1. Create a TinfoilAI client with the enclave and repo configured directly in code
 
 2. Demonstrate a streaming chat completion with real-time output
 
-The code shows both the basic usage pattern and error handling for each approach. 
+The code shows both the basic usage pattern and error handling. The API key is loaded from the `OPENAI_API_KEY` environment variable, while the enclave and repo are specified directly in the constructor. 
