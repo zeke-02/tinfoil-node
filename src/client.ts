@@ -65,6 +65,14 @@ function createAsyncProxy<T extends object>(promise: Promise<T>): T {
  * - Certificate fingerprint validation for each request
  * - Type-safe access to OpenAI's chat completion APIs
  */
+
+interface TinfoilAIOptions {
+  enclave?: string;
+  repo?: string;
+  apiKey?: string;
+  [key: string]: any; // Allow other OpenAI client options
+}
+
 export class TinfoilAI {
   private client?: OpenAI;
   private enclave: string;
@@ -74,37 +82,28 @@ export class TinfoilAI {
   private readyPromise?: Promise<void>;
 
   /**
-   * Creates a new TinfoilAI instance using environment variables.
-   * @param options - Optional OpenAI client configuration options
-   * @throws Error if TINFOIL_ENCLAVE or TINFOIL_REPO environment variables are not set
+   * Creates a new TinfoilAI instance.
+   * @param options - Configuration options including enclave, repo, apiKey, and other OpenAI client options
+   * @throws Error if enclave or repo are not provided either in options or environment variables
    */
-  constructor(options?: ConstructorParameters<typeof OpenAI>[0]);
-  /**
-   * Creates a new TinfoilAI instance with explicit enclave and repo values.
-   * @param enclave - The enclave URL/identifier
-   * @param repo - The repository identifier
-   * @param options - Optional OpenAI client configuration options
-   */
-  constructor(enclave: string, repo: string, options?: ConstructorParameters<typeof OpenAI>[0]);
-  constructor(
-    enclaveOrOptions?: string | ConstructorParameters<typeof OpenAI>[0],
-    repoOrNothing?: string,
-    options?: ConstructorParameters<typeof OpenAI>[0]
-  ) {
-    if (typeof enclaveOrOptions === 'string' && typeof repoOrNothing === 'string') {
-      this.enclave = enclaveOrOptions;
-      this.repo = repoOrNothing;
-      this.clientPromise = this.initClient(options);
-    } else {
-      this.enclave = process.env.TINFOIL_ENCLAVE || '';
-      this.repo = process.env.TINFOIL_REPO || '';
-
-      if (!this.enclave || !this.repo) {
-        throw new Error('tinfoil: TINFOIL_ENCLAVE and TINFOIL_REPO environment variables must be specified');
-      }
-
-      this.clientPromise = this.initClient(enclaveOrOptions as ConstructorParameters<typeof OpenAI>[0]);
+  constructor(options: TinfoilAIOptions = {}) {
+    // Extract TinfoilAI-specific options with environment variable fallbacks
+    this.enclave = options.enclave || process.env.TINFOIL_ENCLAVE || '';
+    this.repo = options.repo || process.env.TINFOIL_REPO || '';
+    
+    if (!this.enclave || !this.repo) {
+      throw new Error('tinfoil: enclave and repo must be specified either in options or via TINFOIL_ENCLAVE and TINFOIL_REPO environment variables');
     }
+
+    // Prepare OpenAI client options
+    const { enclave: _, repo: __, ...openAIOptions } = options;
+    
+    // Set apiKey from options or environment variable
+    if (options.apiKey || process.env.OPENAI_API_KEY) {
+      openAIOptions.apiKey = options.apiKey || process.env.OPENAI_API_KEY;
+    }
+
+    this.clientPromise = this.initClient(openAIOptions);
   }
 
   /**
