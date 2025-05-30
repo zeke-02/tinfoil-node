@@ -2,8 +2,6 @@ import { TinfoilAI } from '../../src';
 import { config } from 'dotenv';
 
 config();
-process.env.TINFOIL_ENCLAVE = process.env.TINFOIL_ENCLAVE || "llama3-3-70b.model.tinfoil.sh";
-process.env.TINFOIL_REPO = process.env.TINFOIL_REPO || "tinfoilsh/confidential-llama3-3-70b";
 
 async function runStreamingExample(client: TinfoilAI) {
     const messages = [
@@ -47,13 +45,18 @@ async function runStreamingExample(client: TinfoilAI) {
 
 async function main() {
     try {
-        console.log('Environment configuration:');
-        console.log('TINFOIL_ENCLAVE:', process.env.TINFOIL_ENCLAVE);
-        console.log('TINFOIL_REPO:', process.env.TINFOIL_REPO);
+        const enclave = 'llama3-3-70b.model.tinfoil.sh';
+        const repo = 'tinfoilsh/confidential-llama3-3-70b';
+        
+        console.log('Configuration:');
+        console.log('Enclave:', enclave);
+        console.log('Repo:', repo);
 
-        // Create a new TinfoilAI
+        // Create a new TinfoilAI with direct parameters
         const client = new TinfoilAI({
-            apiKey: 'tinfoil' // Replace with your actual API key
+            enclave: enclave,
+            repo: repo
+            // apiKey will be taken from OPENAI_API_KEY environment variable
         });
 
         // Run streaming example
