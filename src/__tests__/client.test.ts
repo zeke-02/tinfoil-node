@@ -3,10 +3,11 @@ import { TinfoilAI } from '../client';
 import { createTinfoilAI } from '../ai-sdk-provider';
 import '@jest/globals';
 
-// Test configuration with defaults
+// Test configuration
 interface TestConfig {
   enclave: string;
   repo: string;
+  apiKey: string;
 }
 
 const getEnvOrDefault = (key: string, defaultValue: string): string => {
@@ -16,39 +17,55 @@ const getEnvOrDefault = (key: string, defaultValue: string): string => {
 const testConfig: TestConfig = {
   enclave: getEnvOrDefault('TINFOIL_TEST_ENCLAVE', 'llama3-3-70b.model.tinfoil.sh'),
   repo: getEnvOrDefault('TINFOIL_TEST_REPO', 'tinfoilsh/confidential-llama3-3-70b'),
+  apiKey: 'tinfoil'
 };
 
 describe('TinfoilAI', () => {
-  beforeEach(() => {
-    process.env.TINFOIL_ENCLAVE = testConfig.enclave;
-    process.env.TINFOIL_REPO = testConfig.repo;
-  });
-
-  afterEach(() => {
-    delete process.env.TINFOIL_ENCLAVE;
-    delete process.env.TINFOIL_REPO;
-  });
-
-  it('should create a client with environment variables', async () => {
+  it('should create a client with direct parameters', async () => {
     const client = new TinfoilAI({
-      apiKey: 'tinfoil'
+      enclave: testConfig.enclave,
+      repo: testConfig.repo,
+      apiKey: testConfig.apiKey
     });
     await client.ready();
     expect(client).toBeDefined();
   }, 60000);
 
-  it('should throw error when environment variables are not set', () => {
+  it('should create a client with environment variables fallback', async () => {
+    // Set environment variables
+    process.env.TINFOIL_ENCLAVE = testConfig.enclave;
+    process.env.TINFOIL_REPO = testConfig.repo;
+    process.env.OPENAI_API_KEY = testConfig.apiKey;
+
+    try {
+      const client = new TinfoilAI();
+      await client.ready();
+      expect(client).toBeDefined();
+    } finally {
+      // Clean up
+      delete process.env.TINFOIL_ENCLAVE;
+      delete process.env.TINFOIL_REPO;
+      delete process.env.OPENAI_API_KEY;
+    }
+  }, 60000);
+
+  it('should throw error when required parameters are missing', () => {
+    // Ensure no environment variables are set
     delete process.env.TINFOIL_ENCLAVE;
     delete process.env.TINFOIL_REPO;
+    delete process.env.OPENAI_API_KEY;
     
     expect(() => new TinfoilAI({
-      apiKey: 'tinfoil'
-    })).toThrow('tinfoil: TINFOIL_ENCLAVE and TINFOIL_REPO environment variables must be specified');
+      apiKey: testConfig.apiKey
+      // Missing enclave and repo
+    })).toThrow('tinfoil: enclave and repo must be specified either in options or via TINFOIL_ENCLAVE and TINFOIL_REPO environment variables');
   });
 
   it('should perform non-streaming chat completion', async () => {
     const client = new TinfoilAI({
-      apiKey: 'tinfoil'
+      enclave: testConfig.enclave,
+      repo: testConfig.repo,
+      apiKey: testConfig.apiKey
     });
 
     await client.ready();
@@ -67,7 +84,9 @@ describe('TinfoilAI', () => {
 
   it('should handle streaming chat completion', async () => {
     const client = new TinfoilAI({
-      apiKey: 'tinfoil'
+      enclave: testConfig.enclave,
+      repo: testConfig.repo,
+      apiKey: testConfig.apiKey
     });
 
     await client.ready();
@@ -98,9 +117,9 @@ describe('TinfoilAI', () => {
 
   it('should pass client verification with the AI SDK provider', async () => {
     const tinfoilai = await createTinfoilAI(
-      "tinfoilsh/confidential-llama3-3-70b",
-      "llama3-3-70b.model.tinfoil.sh",
-      "tinfoil"
+      testConfig.repo,
+      testConfig.enclave,
+      testConfig.apiKey
     );
 
     const { textStream } = streamText({
