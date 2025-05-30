@@ -19,9 +19,9 @@ This example demonstrates how to use the Tinfoil client to interact with OpenAI'
    ```
    Then edit `.env` with your configuration:
    ```bash
-   TINFOIL_ENCLAVE="models.default.tinfoil.sh"
-   TINFOIL_REPO="tinfoilsh/default-models-nitro"
-   TINFOIL_API_KEY="your_api_key_here"
+   TINFOIL_ENCLAVE="enclave.example.com"
+   TINFOIL_REPO="org/model-repo"
+   OPENAI_API_KEY="your-api-key"
    ```
    Note: The example will use default values if environment variables are not set.
 
