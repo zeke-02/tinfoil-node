@@ -17,7 +17,7 @@ npm install tinfoil
 import { TinfoilAI } from 'tinfoil';
 
 const client = new TinfoilAI({
-  apiKey: 'your-api-key'                 // or use OPENAI_API_KEY env var
+  apiKey: 'your-api-key'                 // or use TINFOIL_API_KEY env var
 });
 
 // Uses identical method calls as the OpenAI client
@@ -42,7 +42,7 @@ npm install
 3. Optionally create a `.env` file with your configuration:
 
 ```bash
-OPENAI_API_KEY=your-api-key
+TINFOIL_API_KEY=your-api-key
 ```
 
 4. Run the example:

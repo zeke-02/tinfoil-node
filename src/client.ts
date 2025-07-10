@@ -84,8 +84,8 @@ export class TinfoilAI {
   constructor(options: TinfoilAIOptions = {}) {
     // Set apiKey from options or environment variable
     const openAIOptions = { ...options };
-    if (options.apiKey || process.env.OPENAI_API_KEY) {
-      openAIOptions.apiKey = options.apiKey || process.env.OPENAI_API_KEY;
+    if (options.apiKey || process.env.TINFOIL_API_KEY) {
+      openAIOptions.apiKey = options.apiKey || process.env.TINFOIL_API_KEY;
     }
 
     this.clientPromise = this.initClient(openAIOptions);

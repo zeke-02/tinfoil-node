@@ -46,11 +46,11 @@ async function runStreamingExample(client: TinfoilAI) {
 async function main() {
     try {
         console.log('Configuration:');
-        console.log('API Key:', process.env.OPENAI_API_KEY ? 'Set' : 'Not set');
+        console.log('API Key:', process.env.TINFOIL_API_KEY ? 'Set' : 'Not set');
 
         // Create a new TinfoilAI instance
         const client = new TinfoilAI({
-            // apiKey will be taken from OPENAI_API_KEY environment variable
+            // apiKey will be taken from TINFOIL_API_KEY environment variable
         });
 
         // Run streaming example

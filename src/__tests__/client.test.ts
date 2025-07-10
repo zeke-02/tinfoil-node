@@ -27,7 +27,7 @@ describe('TinfoilAI', () => {
 
   it('should create a client with environment variables fallback', async () => {
     // Set environment variables
-    process.env.OPENAI_API_KEY = testConfig.apiKey;
+    process.env.TINFOIL_API_KEY = testConfig.apiKey;
 
     try {
       const client = new TinfoilAI();
@@ -35,7 +35,7 @@ describe('TinfoilAI', () => {
       expect(client).toBeDefined();
     } finally {
       // Clean up
-      delete process.env.OPENAI_API_KEY;
+      delete process.env.TINFOIL_API_KEY;
     }
   }, 60000);
 
