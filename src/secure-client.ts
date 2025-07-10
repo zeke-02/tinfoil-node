@@ -72,14 +72,14 @@ export interface GroundTruth {
  * SecureClient handles verification of code and runtime measurements using WebAssembly
  */
 export class SecureClient {
-    private enclave: string;
-    private repo: string;
     private static goInstance: any = null;
     private static initializationPromise: Promise<void> | null = null;
+    
+    // Hardcoded values for the Tinfoil inference proxy
+    private readonly enclave = 'inference.tinfoil.sh';
+    private readonly repo = 'tinfoilsh/confidential-inference-proxy';
 
-    constructor(enclave: string, repo: string) {
-        this.enclave = enclave;
-        this.repo = repo;
+    constructor() {
     }
 
     /**

@@ -7,15 +7,13 @@ import tls, { checkServerIdentity as tlsCheckServerIdentity } from "node:tls";
 import { X509Certificate, createHash } from "node:crypto";
 
 /**
- * Creates an AI SDK provider with the specified repository and enclave.
+ * Creates an AI SDK provider with the specified API key.
  * 
- * @param repo - The repository identifier
- * @param enclave - The enclave URL/identifier
  * @param apiKey - The API key for the Tinfoil API
  * @returns A TinfoilAI instance
  */
-export async function createTinfoilAI(repo: string, enclave: string, apiKey: string) {
-    const sc = new SecureClient(enclave, repo);
+export async function createTinfoilAI(apiKey: string) {
+    const sc = new SecureClient();
     const groundTruth = await sc.verify();
   
     const connect = buildConnector({
@@ -41,7 +39,7 @@ export async function createTinfoilAI(repo: string, enclave: string, apiKey: str
   
     return createOpenAICompatible({
       name: "tinfoil",
-      baseURL: `https://${enclave}/v1`,
+      baseURL: `https://inference.tinfoil.sh/v1`, 
       apiKey: apiKey,
       fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
         if (!init) {

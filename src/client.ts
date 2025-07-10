@@ -67,38 +67,23 @@ function createAsyncProxy<T extends object>(promise: Promise<T>): T {
  */
 
 interface TinfoilAIOptions {
-  enclave?: string;
-  repo?: string;
   apiKey?: string;
   [key: string]: any; // Allow other OpenAI client options
 }
 
 export class TinfoilAI {
   private client?: OpenAI;
-  private enclave: string;
-  private repo: string;
   private groundTruth?: GroundTruth;
   private clientPromise: Promise<OpenAI>;
   private readyPromise?: Promise<void>;
 
   /**
    * Creates a new TinfoilAI instance.
-   * @param options - Configuration options including enclave, repo, apiKey, and other OpenAI client options
-   * @throws Error if enclave or repo are not provided either in options or environment variables
+   * @param options - Configuration options including apiKey and other OpenAI client options
    */
   constructor(options: TinfoilAIOptions = {}) {
-    // Extract TinfoilAI-specific options with environment variable fallbacks
-    this.enclave = options.enclave || process.env.TINFOIL_ENCLAVE || '';
-    this.repo = options.repo || process.env.TINFOIL_REPO || '';
-    
-    if (!this.enclave || !this.repo) {
-      throw new Error('tinfoil: enclave and repo must be specified either in options or via TINFOIL_ENCLAVE and TINFOIL_REPO environment variables');
-    }
-
-    // Prepare OpenAI client options
-    const { enclave: _, repo: __, ...openAIOptions } = options;
-    
     // Set apiKey from options or environment variable
+    const openAIOptions = { ...options };
     if (options.apiKey || process.env.OPENAI_API_KEY) {
       openAIOptions.apiKey = options.apiKey || process.env.OPENAI_API_KEY;
     }
@@ -125,7 +110,7 @@ export class TinfoilAI {
 
   private async createOpenAIClient(options: Partial<Omit<ConstructorParameters<typeof OpenAI>[0], 'baseURL'>> = {}): Promise<OpenAI> {
     // Verify the enclave and get the certificate fingerprint
-    const secureClient = new SecureClient(this.enclave, this.repo);
+    const secureClient = new SecureClient();
     
     try {
       this.groundTruth = await secureClient.verify();
@@ -160,10 +145,10 @@ export class TinfoilAI {
     });
 
     // Create the OpenAI client with our custom configuration
+    // Note: baseURL will need to be determined by the verification process
     return new OpenAI({
       ...options,
-      baseURL: `https://${this.enclave}/v1/`,
-      httpAgent: httpsAgent,
+      baseURL: `https://inference.tinfoil.sh/v1/`,
     });
   }
 

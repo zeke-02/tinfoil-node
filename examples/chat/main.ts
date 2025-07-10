@@ -45,17 +45,11 @@ async function runStreamingExample(client: TinfoilAI) {
 
 async function main() {
     try {
-        const enclave = 'llama3-3-70b.model.tinfoil.sh';
-        const repo = 'tinfoilsh/confidential-llama3-3-70b';
-        
         console.log('Configuration:');
-        console.log('Enclave:', enclave);
-        console.log('Repo:', repo);
+        console.log('API Key:', process.env.OPENAI_API_KEY ? 'Set' : 'Not set');
 
-        // Create a new TinfoilAI with direct parameters
+        // Create a new TinfoilAI instance
         const client = new TinfoilAI({
-            enclave: enclave,
-            repo: repo
             // apiKey will be taken from OPENAI_API_KEY environment variable
         });
 
