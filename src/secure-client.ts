@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import {TextDecoder, TextEncoder} from 'util';
+import { TINFOIL_CONFIG } from './config';
 
 // Set up browser-like globals that the Go WASM runtime expects
 const globalThis = global as any;
@@ -72,14 +73,14 @@ export interface GroundTruth {
  * SecureClient handles verification of code and runtime measurements using WebAssembly
  */
 export class SecureClient {
-    private enclave: string;
-    private repo: string;
     private static goInstance: any = null;
     private static initializationPromise: Promise<void> | null = null;
+    
+    // Values for the Tinfoil inference proxy from config
+    private readonly enclave = new URL(TINFOIL_CONFIG.INFERENCE_BASE_URL).hostname;
+    private readonly repo = TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
-    constructor(enclave: string, repo: string) {
-        this.enclave = enclave;
-        this.repo = repo;
+    constructor() {
     }
 
     /**
