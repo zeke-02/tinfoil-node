@@ -15,11 +15,11 @@ This example demonstrates how to use the Tinfoil client to interact with OpenAI'
    ```
 4. Set up your API key environment variable:
    ```bash
-   export TINFOIL_API_KEY="your-api-key"
+   export TINFOIL_API_KEY="<YOUR_API_KEY>"
    ```
    Or create a `.env` file with:
    ```bash
-   TINFOIL_API_KEY="your-api-key"
+   TINFOIL_API_KEY="<YOUR_API_KEY>"
    ```
 
 ## Running the Example
@@ -33,7 +33,7 @@ npx ts-node main.ts
 
 The example will:
 
-1. Create a TinfoilAI client with automatic enclave verification
+1. Create a TinfoilAI client with default parameters
 
 2. Demonstrate a streaming chat completion with real-time output
 

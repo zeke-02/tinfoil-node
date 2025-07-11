@@ -1,6 +1,7 @@
 import { streamText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { SecureClient } from "./secure-client";
+import { TINFOIL_CONFIG } from "./config";
 
 import { Agent, buildConnector, RequestInit, fetch as undiciFetch } from "undici";
 import tls, { checkServerIdentity as tlsCheckServerIdentity } from "node:tls";
@@ -39,7 +40,7 @@ export async function createTinfoilAI(apiKey: string) {
   
     return createOpenAICompatible({
       name: "tinfoil",
-      baseURL: `https://inference.tinfoil.sh/v1`, 
+      baseURL: TINFOIL_CONFIG.INFERENCE_BASE_URL.replace(/\/$/, ''), 
       apiKey: apiKey,
       fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
         if (!init) {

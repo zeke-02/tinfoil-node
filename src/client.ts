@@ -14,6 +14,7 @@ import { createHash, X509Certificate } from 'crypto';
 import { SecureClient, GroundTruth } from './secure-client';
 import https from 'https';
 import { PeerCertificate } from 'tls';
+import { TINFOIL_CONFIG } from './config';
 
 /**
  * Creates a proxy that allows property access and method calls on a Promise before it resolves.
@@ -148,7 +149,7 @@ export class TinfoilAI {
     // Note: baseURL will need to be determined by the verification process
     return new OpenAI({
       ...options,
-      baseURL: `https://inference.tinfoil.sh/v1/`,
+      baseURL: TINFOIL_CONFIG.INFERENCE_BASE_URL,
     });
   }
 
