@@ -101,7 +101,10 @@ export class SecureClient {
           wasmBuffer,
           SecureClient.goInstance.importObject,
         );
-        const runPromise = SecureClient.goInstance.run(result.instance);
+        SecureClient.goInstance.run(result.instance).catch((error) => {
+          console.error("Go instance failed to run:", error);
+          throw error;
+        });
 
         let attempts = 0;
         const maxAttempts = 10;
