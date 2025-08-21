@@ -1,5 +1,5 @@
-import OpenAI from 'openai';
-import type { 
+import OpenAI from "openai";
+import type {
   Chat,
   Files,
   FineTuning,
@@ -8,13 +8,13 @@ import type {
   Embeddings,
   Models,
   Moderations,
-  Beta
-} from 'openai/resources';
-import { createHash, X509Certificate } from 'crypto';
-import { SecureClient, GroundTruth } from './secure-client';
-import https from 'https';
-import { PeerCertificate } from 'tls';
-import { TINFOIL_CONFIG } from './config';
+  Beta,
+} from "openai/resources";
+import { createHash, X509Certificate } from "crypto";
+import { SecureClient, GroundTruth } from "./secure-client";
+import https from "https";
+import { PeerCertificate } from "tls";
+import { TINFOIL_CONFIG } from "./config";
 
 /**
  * Detects if the code is running in a real browser environment.
@@ -22,18 +22,22 @@ import { TINFOIL_CONFIG } from './config';
  */
 function isRealBrowser(): boolean {
   // Check for Node.js-specific globals that wouldn't exist in a real browser
-  if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+  if (
+    typeof process !== "undefined" &&
+    process.versions &&
+    process.versions.node
+  ) {
     return false; // Definitely Node.js
   }
-  
+
   // Check for browser-specific window object AND ensure it's not a Node.js global mock
-  if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
+  if (typeof window !== "undefined" && typeof window.document !== "undefined") {
     // Additional check: real browsers have navigator.userAgent
-    if (typeof navigator !== 'undefined' && navigator.userAgent) {
+    if (typeof navigator !== "undefined" && navigator.userAgent) {
       return true; // Likely a real browser
     }
   }
-  
+
   // Default to safe: assume it's not a browser (Node.js with WASM)
   return false;
 }
@@ -42,19 +46,19 @@ function isRealBrowser(): boolean {
  * Creates a proxy that allows property access and method calls on a Promise before it resolves.
  * This enables a more ergonomic API where you can chain properties and methods without explicitly
  * awaiting the promise first.
- * 
+ *
  * @param promise - A Promise that will resolve to an object
  * @returns A proxied version of the promised object that allows immediate property/method access
- * 
+ *
  * @example
  * // Instead of:
  * const client = await getClient();
  * const result = await client.someProperty.someMethod();
- * 
+ *
  * // You can write:
  * const client = createAsyncProxy(getClient());
  * const result = await client.someProperty.someMethod();
- * 
+ *
  * @template T - The type of object that the promise resolves to
  */
 function createAsyncProxy<T extends object>(promise: Promise<T>): T {
@@ -63,26 +67,28 @@ function createAsyncProxy<T extends object>(promise: Promise<T>): T {
       return new Proxy(() => {}, {
         get(_, nestedProp) {
           return (...args: any[]) =>
-            promise.then(obj => {
+            promise.then((obj) => {
               const value = (obj as any)[prop][nestedProp];
-              return typeof value === 'function' ? value.apply((obj as any)[prop], args) : value;
+              return typeof value === "function"
+                ? value.apply((obj as any)[prop], args)
+                : value;
             });
         },
         apply(_, __, args) {
-          return promise.then(obj => {
+          return promise.then((obj) => {
             const value = (obj as any)[prop];
-            return typeof value === 'function' ? value.apply(obj, args) : value;
+            return typeof value === "function" ? value.apply(obj, args) : value;
           });
-        }
+        },
       });
-    }
+    },
   });
 }
 
 /**
  * TinfoilAI is a wrapper around the OpenAI API client that adds additional
  * security measures through enclave verification and certificate fingerprint validation.
- * 
+ *
  * It provides:
  * - Automatic verification of Tinfoil secure enclaves
  * - Certificate fingerprint validation for each request
@@ -99,7 +105,7 @@ export class TinfoilAI {
   private groundTruth?: GroundTruth;
   private clientPromise: Promise<OpenAI>;
   private readyPromise?: Promise<void>;
-  
+
   // Expose properties for compatibility
   public apiKey?: string;
   public baseURL?: string;
@@ -114,7 +120,7 @@ export class TinfoilAI {
     if (options.apiKey || process.env.TINFOIL_API_KEY) {
       openAIOptions.apiKey = options.apiKey || process.env.TINFOIL_API_KEY;
     }
-    
+
     // Store properties for compatibility
     this.apiKey = openAIOptions.apiKey;
     this.baseURL = TINFOIL_CONFIG.INFERENCE_BASE_URL;
@@ -135,14 +141,20 @@ export class TinfoilAI {
     return this.readyPromise;
   }
 
-  private async initClient(options?: Partial<Omit<ConstructorParameters<typeof OpenAI>[0], 'baseURL'>>): Promise<OpenAI> {
+  private async initClient(
+    options?: Partial<Omit<ConstructorParameters<typeof OpenAI>[0], "baseURL">>,
+  ): Promise<OpenAI> {
     return this.createOpenAIClient(options);
   }
 
-  private async createOpenAIClient(options: Partial<Omit<ConstructorParameters<typeof OpenAI>[0], 'baseURL'>> = {}): Promise<OpenAI> {
+  private async createOpenAIClient(
+    options: Partial<
+      Omit<ConstructorParameters<typeof OpenAI>[0], "baseURL">
+    > = {},
+  ): Promise<OpenAI> {
     // Verify the enclave and get the certificate fingerprint
     const secureClient = new SecureClient();
-    
+
     try {
       this.groundTruth = await secureClient.verify();
     } catch (error) {
@@ -156,23 +168,30 @@ export class TinfoilAI {
       rejectUnauthorized: true,
       checkServerIdentity: (host: string, cert: PeerCertificate) => {
         if (!cert || !cert.raw) {
-          throw new Error('No certificate found');
+          throw new Error("No certificate found");
         }
         if (!cert.pubkey) {
-          throw new Error('No public key found');
+          throw new Error("No public key found");
         }
 
-        const pemCert = `-----BEGIN CERTIFICATE-----\n${cert.raw.toString('base64')}\n-----END CERTIFICATE-----`;
+        const pemCert = `-----BEGIN CERTIFICATE-----\n${cert.raw.toString("base64")}\n-----END CERTIFICATE-----`;
         const x509Cert = new X509Certificate(pemCert);
-        const publicKey = x509Cert.publicKey.export({ format: 'der', type: 'spki' });
-        const publicKeyHash = createHash('sha256').update(publicKey).digest('hex');
+        const publicKey = x509Cert.publicKey.export({
+          format: "der",
+          type: "spki",
+        });
+        const publicKeyHash = createHash("sha256")
+          .update(publicKey)
+          .digest("hex");
 
         if (publicKeyHash !== expectedFingerprint) {
-          throw new Error(`Certificate fingerprint mismatch. Got ${publicKeyHash}, expected ${expectedFingerprint}`);
+          throw new Error(
+            `Certificate fingerprint mismatch. Got ${publicKeyHash}, expected ${expectedFingerprint}`,
+          );
         }
 
         return undefined; // Validation successful
-      }
+      },
     });
 
     // Create the OpenAI client with our custom configuration
@@ -209,7 +228,7 @@ export class TinfoilAI {
    * Automatically initializes the client if needed.
    */
   get chat(): Chat {
-    return createAsyncProxy(this.ensureReady().then(client => client.chat));
+    return createAsyncProxy(this.ensureReady().then((client) => client.chat));
   }
 
   /**
@@ -217,7 +236,7 @@ export class TinfoilAI {
    * Automatically initializes the client if needed.
    */
   get files(): Files {
-    return createAsyncProxy(this.ensureReady().then(client => client.files));
+    return createAsyncProxy(this.ensureReady().then((client) => client.files));
   }
 
   /**
@@ -225,7 +244,9 @@ export class TinfoilAI {
    * Automatically initializes the client if needed.
    */
   get fineTuning(): FineTuning {
-    return createAsyncProxy(this.ensureReady().then(client => client.fineTuning));
+    return createAsyncProxy(
+      this.ensureReady().then((client) => client.fineTuning),
+    );
   }
 
   /**
@@ -233,7 +254,7 @@ export class TinfoilAI {
    * Automatically initializes the client if needed.
    */
   get images(): Images {
-    return createAsyncProxy(this.ensureReady().then(client => client.images));
+    return createAsyncProxy(this.ensureReady().then((client) => client.images));
   }
 
   /**
@@ -241,7 +262,7 @@ export class TinfoilAI {
    * Automatically initializes the client if needed.
    */
   get audio(): Audio {
-    return createAsyncProxy(this.ensureReady().then(client => client.audio));
+    return createAsyncProxy(this.ensureReady().then((client) => client.audio));
   }
 
   /**
@@ -249,7 +270,9 @@ export class TinfoilAI {
    * Automatically initializes the client if needed.
    */
   get embeddings(): Embeddings {
-    return createAsyncProxy(this.ensureReady().then(client => client.embeddings));
+    return createAsyncProxy(
+      this.ensureReady().then((client) => client.embeddings),
+    );
   }
 
   /**
@@ -257,7 +280,7 @@ export class TinfoilAI {
    * Automatically initializes the client if needed.
    */
   get models(): Models {
-    return createAsyncProxy(this.ensureReady().then(client => client.models));
+    return createAsyncProxy(this.ensureReady().then((client) => client.models));
   }
 
   /**
@@ -265,7 +288,9 @@ export class TinfoilAI {
    * Automatically initializes the client if needed.
    */
   get moderations(): Moderations {
-    return createAsyncProxy(this.ensureReady().then(client => client.moderations));
+    return createAsyncProxy(
+      this.ensureReady().then((client) => client.moderations),
+    );
   }
 
   /**
@@ -273,7 +298,7 @@ export class TinfoilAI {
    * Automatically initializes the client if needed.
    */
   get beta(): Beta {
-    return createAsyncProxy(this.ensureReady().then(client => client.beta));
+    return createAsyncProxy(this.ensureReady().then((client) => client.beta));
   }
 }
 

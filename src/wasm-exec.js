@@ -144,25 +144,25 @@
 
   if (!globalThis.crypto) {
     throw new Error(
-      "globalThis.crypto is not available, polyfill required (crypto.getRandomValues only)"
+      "globalThis.crypto is not available, polyfill required (crypto.getRandomValues only)",
     );
   }
 
   if (!globalThis.performance) {
     throw new Error(
-      "globalThis.performance is not available, polyfill required (performance.now only)"
+      "globalThis.performance is not available, polyfill required (performance.now only)",
     );
   }
 
   if (!globalThis.TextEncoder) {
     throw new Error(
-      "globalThis.TextEncoder is not available, polyfill required"
+      "globalThis.TextEncoder is not available, polyfill required",
     );
   }
 
   if (!globalThis.TextDecoder) {
     throw new Error(
-      "globalThis.TextDecoder is not available, polyfill required"
+      "globalThis.TextDecoder is not available, polyfill required",
     );
   }
 
@@ -283,7 +283,7 @@
         const saddr = getInt64(addr + 0);
         const len = getInt64(addr + 8);
         return decoder.decode(
-          new DataView(this._inst.exports.mem.buffer, saddr, len)
+          new DataView(this._inst.exports.mem.buffer, saddr, len),
         );
       };
 
@@ -319,7 +319,7 @@
             const n = this.mem.getInt32(sp + 24, true);
             fs.writeSync(
               fd,
-              new Uint8Array(this._inst.exports.mem.buffer, p, n)
+              new Uint8Array(this._inst.exports.mem.buffer, p, n),
             );
           },
 
@@ -350,15 +350,18 @@
             this._nextCallbackTimeoutID++;
             this._scheduledTimeouts.set(
               id,
-              setTimeout(() => {
-                this._resume();
-                while (this._scheduledTimeouts.has(id)) {
-                  // for some reason Go failed to register the timeout event, log and try again
-                  // (temporary workaround for https://github.com/golang/go/issues/28975)
-                  console.warn("scheduleTimeoutEvent: missed timeout event");
+              setTimeout(
+                () => {
                   this._resume();
-                }
-              }, getInt64(sp + 8))
+                  while (this._scheduledTimeouts.has(id)) {
+                    // for some reason Go failed to register the timeout event, log and try again
+                    // (temporary workaround for https://github.com/golang/go/issues/28975)
+                    console.warn("scheduleTimeoutEvent: missed timeout event");
+                    this._resume();
+                  }
+                },
+                getInt64(sp + 8),
+              ),
             );
             this.mem.setInt32(sp + 16, id, true);
           },
@@ -410,7 +413,7 @@
             Reflect.set(
               loadValue(sp + 8),
               loadString(sp + 16),
-              loadValue(sp + 32)
+              loadValue(sp + 32),
             );
           },
 
@@ -425,7 +428,7 @@
             sp >>>= 0;
             storeValue(
               sp + 24,
-              Reflect.get(loadValue(sp + 8), getInt64(sp + 16))
+              Reflect.get(loadValue(sp + 8), getInt64(sp + 16)),
             );
           },
 
@@ -435,7 +438,7 @@
             Reflect.set(
               loadValue(sp + 8),
               getInt64(sp + 16),
-              loadValue(sp + 24)
+              loadValue(sp + 24),
             );
           },
 
@@ -517,7 +520,7 @@
             sp >>>= 0;
             this.mem.setUint8(
               sp + 24,
-              loadValue(sp + 8) instanceof loadValue(sp + 16) ? 1 : 0
+              loadValue(sp + 8) instanceof loadValue(sp + 16) ? 1 : 0,
             );
           },
 
@@ -631,7 +634,7 @@
       const wasmMinDataAddr = 4096 + 8192;
       if (offset >= wasmMinDataAddr) {
         throw new Error(
-          "total length of command line and environment variables exceeds limit"
+          "total length of command line and environment variables exceeds limit",
         );
       }
 
