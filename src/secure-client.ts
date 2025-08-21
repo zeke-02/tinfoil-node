@@ -101,7 +101,7 @@ export class SecureClient {
           wasmBuffer,
           SecureClient.goInstance.importObject,
         );
-        SecureClient.goInstance.run(result.instance).catch((error) => {
+        SecureClient.goInstance.run(result.instance).catch((error: unknown) => {
           console.error("Go instance failed to run:", error);
           throw error;
         });
