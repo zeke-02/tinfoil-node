@@ -1,6 +1,7 @@
 .idea/
 verifier
 node_modules/
+.node-tests/
 .env
 .npmrc
 dist/
