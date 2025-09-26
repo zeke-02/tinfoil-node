@@ -43,7 +43,7 @@ export async function runVerificationDemo(): Promise<void> {
   unsubscribe();
   block.stop();
   console.log();
-  if (verification.security.match) {
+  if (verification.security.status === "success" && verification.security.match) {
     console.log(fmt.green("Enclave verification completed"));
   } else {
     console.log(fmt.red("Enclave verification failed"));

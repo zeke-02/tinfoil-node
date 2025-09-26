@@ -246,6 +246,14 @@ export class Verifier {
     
     const attestationResponse = await globalThis.verifyEnclave(targetHost);
     
+    // Validate required fields
+    if (!attestationResponse.tls_public_key) {
+      throw new Error('Missing tls_public_key in attestation response');
+    }
+    if (!attestationResponse.hpke_public_key) {
+      throw new Error('Missing hpke_public_key in attestation response');
+    }
+    
     // Parse runtime measurement
     let parsedRuntimeMeasurement: AttestationMeasurement;
     if (attestationResponse.measurement && typeof attestationResponse.measurement === 'string') {

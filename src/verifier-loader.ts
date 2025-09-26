@@ -144,8 +144,25 @@ export class VerifierWithState extends Verifier {
       // Step 1: Fetch digest if not provided
       if (!digest) {
         this.updateState({ digest: "resolving..." });
-        digest = await this.fetchLatestDigest(repo);
-        this.updateState({ digest });
+        try {
+          digest = await this.fetchLatestDigest(repo);
+          this.updateState({ digest });
+        } catch (error) {
+          // If we can't fetch the digest, mark all steps as error
+          this.updateStepState("code", {
+            status: "error",
+            error: error instanceof Error ? error.message : "Failed to fetch digest",
+          });
+          this.updateStepState("runtime", {
+            status: "error",
+            error: "Cannot proceed without digest",
+          });
+          this.updateStepState("security", {
+            status: "error",
+            error: "Cannot proceed without digest",
+          });
+          return this.state;
+        }
       }
       
       // Step 2: Runtime attestation
@@ -163,7 +180,11 @@ export class VerifierWithState extends Verifier {
           status: "error",
           error: error instanceof Error ? error.message : "Runtime attestation failed",
         });
-        throw error;
+        this.updateStepState("security", {
+          status: "error",
+          error: "Cannot verify security without runtime attestation",
+        });
+        return this.state;
       }
       
       // Step 3: Code attestation
@@ -179,7 +200,11 @@ export class VerifierWithState extends Verifier {
           status: "error",
           error: error instanceof Error ? error.message : "Code attestation failed",
         });
-        throw error;
+        this.updateStepState("security", {
+          status: "error",
+          error: "Cannot verify security without code attestation",
+        });
+        return this.state;
       }
       
       // Step 4: Compare measurements
@@ -195,24 +220,17 @@ export class VerifierWithState extends Verifier {
         match: measurementsMatch,
       });
       
-      if (!measurementsMatch) {
-        throw new Error(
-          `Measurement verification failed: Code measurement (${codeMeasurement.type}) ` +
-          `does not match runtime measurement (${runtimeMeasurement.type})`
-        );
-      }
-      
       return this.state;
       
     } catch (error) {
-      // Ensure security status is updated on any error
+      // Catch any unexpected errors
       if (this.state.security.status === "pending" || this.state.security.status === "loading") {
         this.updateStepState("security", {
           status: "error",
           error: error instanceof Error ? error.message : "Verification failed",
         });
       }
-      throw error;
+      return this.state;
     }
   }
 }
