@@ -20,7 +20,7 @@ async function runStreamingExample(client: TinfoilAI) {
   try {
     console.log("Creating chat completion stream...");
     const stream = await client.chat.completions.create({
-      model: "llama3-3-70b",
+      model: "llama-free",
       messages: messages,
       stream: true,
     });
