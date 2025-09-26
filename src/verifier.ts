@@ -33,13 +33,23 @@ if (!globalThis.crypto) {
   };
 }
 
+// Default: suppress WASM (Go) stdout/stderr logs unless explicitly enabled by caller
+if ((globalThis as any).__tinfoilSuppressWasmLogs === undefined) {
+  (globalThis as any).__tinfoilSuppressWasmLogs = true;
+}
+
 // Force process to stay running (prevent Go from exiting Node process)
 // This is a common issue with Go WASM in Node - it calls process.exit()
 const originalExit = process.exit;
+// Replace process.exit to prevent the Go WASM runtime from terminating the Node.js process.
+// When wasm log suppression is enabled, suppress the informational log about the ignored exit
+// so callers can silence only the WASM-related noise while keeping application logs intact.
 process.exit = ((code?: number) => {
-  console.log(
-    `Process exit called with code ${code} - ignoring to keep Node.js process alive`,
-  );
+  if (!(globalThis as any).__tinfoilSuppressWasmLogs) {
+    console.log(
+      `Process exit called with code ${code} - ignoring to keep Node.js process alive`,
+    );
+  }
   return undefined as never;
 }) as any;
 
@@ -70,6 +80,8 @@ export class Verifier {
   private static wasmUrlUsed: string | null = null;
   private static readonly defaultWasmUrl =
     "https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm";
+  public static originalFsWriteSync: ((fd: number, buf: Uint8Array) => number) | null = null;
+  public static wasmLogsSuppressed = true;
 
   public static clearVerificationCache(): void {
     Verifier.verificationCache.clear();
@@ -132,6 +144,19 @@ export class Verifier {
           console.error("Go instance failed to run:", error);
           throw error;
         });
+
+        // Apply log suppression if requested and fs polyfill exists.
+        // wasm-exec routes Go's stdout/stderr through a Node-like fs.writeSync; overriding it to a no-op
+        // silences only the WASM program's prints without muting the rest of the application's console output.
+        if (Verifier.wasmLogsSuppressed && (globalThis as any).fs?.writeSync) {
+          const fsObj = (globalThis as any).fs as { writeSync: (fd: number, buf: Uint8Array) => number };
+          if (!Verifier.originalFsWriteSync) {
+            Verifier.originalFsWriteSync = fsObj.writeSync.bind(fsObj);
+          }
+          fsObj.writeSync = function (_fd: number, buf: Uint8Array) {
+            return buf.length;
+          };
+        }
 
         let attempts = 0;
         const maxAttempts = 10;
@@ -571,6 +596,30 @@ class WasmVerifierClient implements VerifierClient {
 export async function loadVerifier(wasmUrl?: string): Promise<VerifierClient> {
   await Verifier.initializeWasm(wasmUrl);
   return new WasmVerifierClient();
+}
+
+/**
+ * Suppress stdout/stderr produced by the Go WASM runtime without affecting the rest of the app logs.
+ * Hooks wasm-exec's fs.writeSync (used for Go's stdout/stderr) and stores/restores the original so
+ * suppression is scoped only to the WASM-side prints. Can be called before or after WASM initialization.
+ */
+export function suppressWasmLogs(suppress = true): void {
+  (globalThis as any).__tinfoilSuppressWasmLogs = suppress;
+  Verifier.wasmLogsSuppressed = suppress;
+
+  const fsObj = (globalThis as any).fs as { writeSync: (fd: number, buf: Uint8Array) => number } | undefined;
+  if (!fsObj || typeof fsObj.writeSync !== "function") return;
+
+  if (suppress) {
+    if (!Verifier.originalFsWriteSync) {
+      Verifier.originalFsWriteSync = fsObj.writeSync.bind(fsObj);
+    }
+    fsObj.writeSync = function (_fd: number, buf: Uint8Array) {
+      return buf.length;
+    };
+  } else if (Verifier.originalFsWriteSync) {
+    fsObj.writeSync = Verifier.originalFsWriteSync;
+  }
 }
 
 
