@@ -2,68 +2,31 @@ import { fetch } from "undici";
 import { TextDecoder, TextEncoder } from "util";
 import { TINFOIL_CONFIG } from "./config";
 
-// Set up browser-like globals that the Go WASM runtime expects
-const globalThis = global as any;
-
-// Performance API
-globalThis.performance = {
-  now: () => Date.now(),
-  markResourceTiming: () => {},
-  mark: () => {},
-  measure: () => {},
-  clearMarks: () => {},
-  clearMeasures: () => {},
-  getEntriesByName: () => [],
-  getEntriesByType: () => [],
-  getEntries: () => [],
-};
-
-// Text encoding
-globalThis.TextEncoder = TextEncoder;
-globalThis.TextDecoder = TextDecoder;
-
-// Crypto API (needed by Go WASM)
-if (!globalThis.crypto) {
-  globalThis.crypto = {
-    getRandomValues: (buffer: Uint8Array) => {
-      const randomBytes = require("crypto").randomBytes(buffer.length);
-      buffer.set(new Uint8Array(randomBytes));
-      return buffer;
-    },
-  };
-}
-
-// Default: suppress WASM (Go) stdout/stderr logs unless explicitly enabled by caller
-if ((globalThis as any).__tinfoilSuppressWasmLogs === undefined) {
-  (globalThis as any).__tinfoilSuppressWasmLogs = true;
-}
-
-// Force process to stay running (prevent Go from exiting Node process)
-// This is a common issue with Go WASM in Node - it calls process.exit()
-const originalExit = process.exit;
-// Replace process.exit to prevent the Go WASM runtime from terminating the Node.js process.
-// When wasm log suppression is enabled, suppress the informational log about the ignored exit
-// so callers can silence only the WASM-related noise while keeping application logs intact.
-process.exit = ((code?: number) => {
-  if (!(globalThis as any).__tinfoilSuppressWasmLogs) {
-    console.log(
-      `Process exit called with code ${code} - ignoring to keep Node.js process alive`,
-    );
-  }
-  return undefined as never;
-}) as any;
-
-// Load the Go runtime helper
-require("./wasm-exec.js");
+// Extend globalThis for Go WASM types
+declare const globalThis: {
+  Go: any;
+  verifyCode: (repo: string, digest: string) => Promise<any>;
+  verifyEnclave: (host: string) => Promise<any>;
+} & typeof global;
 
 /**
- * Attestation response from verification
+ * Attestation measurement containing platform type and register values
  */
 export interface AttestationMeasurement {
   type: string;
   registers: string[];
 }
 
+// Platform type constants
+const PLATFORM_TYPES = {
+  SNP_TDX_MULTI_PLATFORM_V1: 'https://tinfoil.sh/predicate/snp-tdx-multiplatform/v1',
+  TDX_GUEST_V1: 'https://tinfoil.sh/predicate/tdx-guest/v1',
+  SEV_GUEST_V1: 'https://tinfoil.sh/predicate/sev-snp-guest/v2'
+} as const;
+
+/**
+ * Attestation response containing cryptographic keys and measurements
+ */
 export interface AttestationResponse {
   tlsPublicKeyFingerprint: string;
   hpkePublicKey: string;
@@ -71,25 +34,92 @@ export interface AttestationResponse {
 }
 
 /**
- * Verifier handles verification of code and runtime measurements using WebAssembly
+ * Compare two measurements according to platform-specific rules
+ * This is predicate function for comparing attestation measurements
+ * taken from https://github.com/tinfoilsh/verifier/blob/main/attestation/attestation.go
+ * 
+ * @param codeMeasurement - Expected measurement from code attestation
+ * @param runtimeMeasurement - Actual measurement from runtime attestation
+ * @returns true if measurements match according to platform rules
+ */
+export function compareMeasurements(codeMeasurement: AttestationMeasurement, runtimeMeasurement: AttestationMeasurement): boolean {
+  // Both are multi-platform: compare all registers directly
+  if (codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1 && 
+      runtimeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
+    return JSON.stringify(codeMeasurement.registers) === JSON.stringify(runtimeMeasurement.registers);
+  }
+
+  // If runtime is multi-platform, flip the comparison
+  if (runtimeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
+    return compareMeasurements(runtimeMeasurement, codeMeasurement);
+  }
+
+  // Code is multi-platform, runtime is specific platform
+  if (codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
+    switch (runtimeMeasurement.type) {
+      case PLATFORM_TYPES.TDX_GUEST_V1: {
+        // For TDX: compare RTMR1 and RTMR2
+        // Multi-platform format: [SNP_MEASUREMENT, RTMR1, RTMR2]
+        // TDX format: [MRTD, RTMR0, RTMR1, RTMR2]
+        if (codeMeasurement.registers.length < 3 || runtimeMeasurement.registers.length < 4) {
+          return false;
+        }
+        const expectedRtmr1 = codeMeasurement.registers[1]; // Position 1 in multi-platform
+        const expectedRtmr2 = codeMeasurement.registers[2]; // Position 2 in multi-platform
+        const actualRtmr1 = runtimeMeasurement.registers[2]; // Position 2 in TDX (0=MRTD, 1=RTMR0)
+        const actualRtmr2 = runtimeMeasurement.registers[3]; // Position 3 in TDX
+        
+        return expectedRtmr1 === actualRtmr1 && expectedRtmr2 === actualRtmr2;
+      }
+        
+      case PLATFORM_TYPES.SEV_GUEST_V1: {
+        // For SEV: compare only the first register (SEV SNP measurement)
+        if (codeMeasurement.registers.length < 1 || runtimeMeasurement.registers.length < 1) {
+          return false;
+        }
+        
+        return codeMeasurement.registers[0] === runtimeMeasurement.registers[0];
+      }
+        
+      default:
+        throw new Error(`Unsupported platform type for comparison: ${runtimeMeasurement.type}`);
+    }
+  }
+
+  // Neither is multi-platform: types must match and all registers must match
+  if (codeMeasurement.type !== runtimeMeasurement.type) {
+    return false;
+  }
+
+  return JSON.stringify(codeMeasurement.registers) === JSON.stringify(runtimeMeasurement.registers);
+}
+
+/**
+ * Verifier performs attestation verification for Tinfoil enclaves
+ * 
+ * The verifier loads a WebAssembly module that:
+ * 1. Fetches the latest code release digest from GitHub
+ * 2. Performs runtime attestation against the enclave
+ * 3. Performs code attestation using the digest
+ * 4. Compares measurements using platform-specific logic
  */
 export class Verifier {
   private static goInstance: any = null;
   private static initializationPromise: Promise<void> | null = null;
   private static verificationCache = new Map<string, Promise<AttestationResponse>>();
-  private static wasmUrlUsed: string | null = null;
   private static readonly defaultWasmUrl =
     "https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm";
   public static originalFsWriteSync: ((fd: number, buf: Uint8Array) => number) | null = null;
   public static wasmLogsSuppressed = true;
+  public static globalsInitialized = false;
 
   public static clearVerificationCache(): void {
     Verifier.verificationCache.clear();
   }
 
-  // Values for the Tinfoil inference proxy from config (overridable per instance)
-  private readonly enclave: string;
-  private readonly repo: string;
+  // Configuration for the target enclave and repository
+  protected readonly enclave: string;
+  protected readonly repo: string;
 
   constructor(options?: { baseURL?: string; repo?: string }) {
     const baseURL = options?.baseURL ?? TINFOIL_CONFIG.INFERENCE_BASE_URL;
@@ -98,56 +128,45 @@ export class Verifier {
   }
 
   /**
-   * Static method to initialize WASM module
-   * This starts automatically when the class is loaded
+   * Initialize the WebAssembly module
+   * This loads the Go runtime and makes verification functions available
    */
-  public static async initializeWasm(wasmUrl?: string): Promise<void> {
+  public static async initializeWasm(): Promise<void> {
     if (Verifier.initializationPromise) {
       return Verifier.initializationPromise;
     }
 
     Verifier.initializationPromise = (async () => {
       try {
+        // Initialize globals if not already done
+        initializeWasmGlobals();
+        
         Verifier.goInstance = new globalThis.Go();
-        const urlToUse = wasmUrl || Verifier.wasmUrlUsed || Verifier.defaultWasmUrl;
-        Verifier.wasmUrlUsed = urlToUse;
 
-        let result: WebAssembly.WebAssemblyInstantiatedSource;
-        try {
-          // Prefer streaming if server provides correct content-type
-          const wasmResponse = await fetch(urlToUse);
-          if (
-            typeof WebAssembly.instantiateStreaming === "function" &&
-            wasmResponse.headers.get("content-type")?.includes("application/wasm")
-          ) {
-            result = await WebAssembly.instantiateStreaming(
-              wasmResponse as unknown as Response,
-              Verifier.goInstance.importObject,
-            );
-          } else {
-            const wasmBuffer = await wasmResponse.arrayBuffer();
-            result = await WebAssembly.instantiate(
-              wasmBuffer,
-              Verifier.goInstance.importObject,
-            );
-          }
-        } catch (instantiateError) {
-          // Fallback to arrayBuffer instantiation as a last resort
-          const fallbackResponse = await fetch(urlToUse);
-          const fallbackBuffer = await fallbackResponse.arrayBuffer();
-          result = await WebAssembly.instantiate(
-            fallbackBuffer,
-            Verifier.goInstance.importObject,
-          );
+        // Load WASM module
+        const wasmResponse = await fetch(Verifier.defaultWasmUrl);
+        if (!wasmResponse.ok) {
+          throw new Error(`Failed to fetch WASM: ${wasmResponse.status} ${wasmResponse.statusText}`);
         }
-        Verifier.goInstance.run(result.instance).catch((error: unknown) => {
-          console.error("Go instance failed to run:", error);
-          throw error;
-        });
+        
+        const wasmBuffer = await wasmResponse.arrayBuffer();
+        const result = await WebAssembly.instantiate(
+          wasmBuffer,
+          Verifier.goInstance.importObject,
+        );
+        
+        // Run the Go instance - this makes functions available on globalThis
+        Verifier.goInstance.run(result.instance);
+        
+        // Wait for initialization to complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Ensure required functions are available
+        if (typeof globalThis.verifyCode === "undefined" || typeof globalThis.verifyEnclave === "undefined") {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
 
-        // Apply log suppression if requested and fs polyfill exists.
-        // wasm-exec routes Go's stdout/stderr through a Node-like fs.writeSync; overriding it to a no-op
-        // silences only the WASM program's prints without muting the rest of the application's console output.
+        // Apply log suppression if requested
         if (Verifier.wasmLogsSuppressed && (globalThis as any).fs?.writeSync) {
           const fsObj = (globalThis as any).fs as { writeSync: (fd: number, buf: Uint8Array) => number };
           if (!Verifier.originalFsWriteSync) {
@@ -157,24 +176,6 @@ export class Verifier {
             return buf.length;
           };
         }
-
-        let attempts = 0;
-        const maxAttempts = 10;
-
-        while (attempts < maxAttempts) {
-          attempts++;
-          await new Promise((resolve) => setTimeout(resolve, 100));
-
-          const hasVerifyCode = typeof globalThis.verifyCode === "function";
-          const hasVerifyEnclave =
-            typeof globalThis.verifyEnclave === "function";
-
-          if (hasVerifyCode && hasVerifyEnclave) {
-            return;
-          }
-        }
-
-        throw new Error("WASM functions not exposed after multiple attempts");
       } catch (error) {
         console.error("WASM initialization error:", error);
         throw error;
@@ -185,15 +186,139 @@ export class Verifier {
   }
 
   /**
-   * Initialize the WASM module
-   * Now just waits for the static initialization to complete
+   * Fetch the latest release digest from GitHub
+   * @param repo - Repository name (e.g., "tinfoilsh/confidential-inference-proxy-hpke")
+   * @returns The digest hash
    */
-  public async initialize(): Promise<void> {
+  public async fetchLatestDigest(repo?: string): Promise<string> {
+    const targetRepo = repo || this.repo;
+    
+    const releaseResponse = await fetch(
+      `https://api-github-proxy.tinfoil.sh/repos/${targetRepo}/releases/latest`,
+      {
+        headers: {
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "tinfoil-node-client",
+        },
+      },
+    );
+
+    if (!releaseResponse.ok) {
+      throw new Error(
+        `GitHub API request failed: ${releaseResponse.status} ${releaseResponse.statusText}`,
+      );
+    }
+
+    const releaseData = (await releaseResponse.json()) as { body?: string };
+
+    // Extract digest from release notes
+    const eifRegex = /EIF hash: ([a-f0-9]{64})/i;
+    const digestRegex = /Digest: `([a-f0-9]{64})`/;
+
+    let digest;
+    const eifMatch = releaseData.body?.match(eifRegex);
+    const digestMatch = releaseData.body?.match(digestRegex);
+
+    if (eifMatch) {
+      digest = eifMatch[1];
+    } else if (digestMatch) {
+      digest = digestMatch[1];
+    } else {
+      throw new Error("Could not find digest in release notes");
+    }
+
+    return digest;
+  }
+  
+  /**
+   * Perform runtime attestation on the enclave
+   * @param enclaveHost - The enclave hostname
+   * @returns Attestation response with measurement and keys
+   */
+  public async verifyEnclave(enclaveHost?: string): Promise<AttestationResponse> {
+    const targetHost = enclaveHost || this.enclave;
+    
     await Verifier.initializeWasm();
+    
+    if (typeof globalThis.verifyEnclave !== "function") {
+      throw new Error("WASM verifyEnclave function not available");
+    }
+    
+    const attestationResponse = await globalThis.verifyEnclave(targetHost);
+    
+    // Parse runtime measurement
+    let parsedRuntimeMeasurement: AttestationMeasurement;
+    if (attestationResponse.measurement && typeof attestationResponse.measurement === 'string') {
+      parsedRuntimeMeasurement = JSON.parse(attestationResponse.measurement);
+    } else if (attestationResponse.measurement && typeof attestationResponse.measurement === 'object') {
+      parsedRuntimeMeasurement = attestationResponse.measurement;
+    } else {
+      throw new Error('Invalid runtime measurement format');
+    }
+    
+    return {
+      tlsPublicKeyFingerprint: attestationResponse.tls_public_key,
+      hpkePublicKey: attestationResponse.hpke_public_key,
+      measurement: parsedRuntimeMeasurement,
+    };
+  }
+  
+  /**
+   * Perform code attestation
+   * @param repo - Repository name
+   * @param digest - Code digest hash
+   * @returns Code measurement
+   */
+  public async verifyCode(repo: string, digest: string): Promise<{ measurement: AttestationMeasurement }> {
+    await Verifier.initializeWasm();
+    
+    if (typeof globalThis.verifyCode !== "function") {
+      throw new Error("WASM verifyCode function not available");
+    }
+    
+    const codeMeasurement = await globalThis.verifyCode(repo, digest);
+    
+    // Parse code measurement to ensure correct format
+    let parsedCodeMeasurement: AttestationMeasurement;
+    if (typeof codeMeasurement === 'string') {
+      parsedCodeMeasurement = JSON.parse(codeMeasurement);
+    } else if (codeMeasurement && typeof codeMeasurement === 'object') {
+      parsedCodeMeasurement = {
+        type: codeMeasurement.type || 'unknown',
+        registers: codeMeasurement.registers || []
+      };
+    } else {
+      throw new Error('Invalid code measurement format');
+    }
+    
+    return { measurement: parsedCodeMeasurement };
+  }
+  
+  /**
+   * Compare measurements using platform-specific logic
+   * @param codeMeasurement - Expected measurement from code attestation
+   * @param runtimeMeasurement - Actual measurement from runtime attestation
+   * @returns true if measurements match according to platform rules
+   */
+  public async compareMeasurements(codeMeasurement: AttestationMeasurement, runtimeMeasurement: AttestationMeasurement): Promise<boolean> {
+    return compareMeasurements(codeMeasurement, runtimeMeasurement);
   }
 
   /**
-   * Verifies the integrity of both the code and runtime environment
+   * Perform attestation verification (backward compatibility)
+   * 
+   * This method:
+   * 1. Fetches the latest code digest from GitHub releases
+   * 2. Calls verifyCode to get the expected measurement for the code
+   * 3. Calls verifyEnclave to get the actual runtime measurement
+   * 4. Compares measurements using platform-specific logic:
+   *    - Multi-platform to multi-platform: all registers must match
+   *    - Multi-platform to TDX: RTMR1 and RTMR2 must match
+   *    - Multi-platform to SEV: first register (SNP measurement) must match
+   *    - Same platform types: all registers must match
+   * 5. Returns the attestation response if verification succeeds
+   * 
+   * @throws Error if measurements don't match or verification fails
    */
   public async verify(): Promise<AttestationResponse> {
     const cacheKey = `${this.repo}::${this.enclave}`;
@@ -201,17 +326,18 @@ export class Verifier {
     if (cachedResult) {
       return cachedResult;
     }
-
+    
     const verificationPromise = (async () => {
-      await this.initialize();
+      await Verifier.initializeWasm();
 
       if (
         typeof globalThis.verifyCode !== "function" ||
         typeof globalThis.verifyEnclave !== "function"
       ) {
-        throw new Error("WASM functions not available");
+        throw new Error("WASM verification functions not available");
       }
 
+      // Fetch the latest release digest
       const releaseResponse = await fetch(
         `https://api-github-proxy.tinfoil.sh/repos/${this.repo}/releases/latest`,
         {
@@ -230,6 +356,7 @@ export class Verifier {
 
       const releaseData = (await releaseResponse.json()) as { body?: string };
 
+      // Extract digest from release notes
       const eifRegex = /EIF hash: ([a-f0-9]{64})/i;
       const digestRegex = /Digest: `([a-f0-9]{64})`/;
 
@@ -245,21 +372,51 @@ export class Verifier {
         throw new Error("Could not find digest in release notes");
       }
 
-      const [measurement, attestationResponse] = await Promise.all([
+      // Perform both verifications in parallel
+      const [codeMeasurement, attestationResponse] = await Promise.all([
         globalThis.verifyCode(this.repo, digest),
         globalThis.verifyEnclave(this.enclave),
       ]);
 
-      // TODO(security): compare measurement.registers !== attestationResponse.measurement
-      // for now we only compare measurement.registers as a hack to get things working
-      if (measurement.registers !== attestationResponse.measurement.registers) {
-        throw new Error("Measurements do not match");
+      // Parse measurements to ensure correct format
+      let parsedCodeMeasurement: AttestationMeasurement;
+      let parsedRuntimeMeasurement: AttestationMeasurement;
+
+      // Code measurement may be returned as JSON string or object
+      if (typeof codeMeasurement === 'string') {
+        parsedCodeMeasurement = JSON.parse(codeMeasurement);
+      } else if (codeMeasurement && typeof codeMeasurement === 'object') {
+        parsedCodeMeasurement = {
+          type: codeMeasurement.type || 'unknown',
+          registers: codeMeasurement.registers || []
+        };
+      } else {
+        throw new Error('Invalid code measurement format');
+      }
+
+      // Runtime measurement from attestation response
+      if (attestationResponse.measurement && typeof attestationResponse.measurement === 'string') {
+        parsedRuntimeMeasurement = JSON.parse(attestationResponse.measurement);
+      } else if (attestationResponse.measurement && typeof attestationResponse.measurement === 'object') {
+        parsedRuntimeMeasurement = attestationResponse.measurement;
+      } else {
+        throw new Error('Invalid runtime measurement format');
+      }
+
+      // Compare measurements using platform-specific logic
+      const measurementsMatch = compareMeasurements(parsedCodeMeasurement, parsedRuntimeMeasurement);
+      
+      if (!measurementsMatch) {
+        throw new Error(
+          `Measurement verification failed: Code measurement (${parsedCodeMeasurement.type}) ` +
+          `does not match runtime measurement (${parsedRuntimeMeasurement.type})`
+        );
       }
 
       return {
         tlsPublicKeyFingerprint: attestationResponse.tls_public_key,
         hpkePublicKey: attestationResponse.hpke_public_key,
-        measurement: attestationResponse.measurement,
+        measurement: parsedRuntimeMeasurement,
       };
     })();
 
@@ -276,332 +433,12 @@ export class Verifier {
 Verifier.initializeWasm().catch(console.error);
 
 /**
- * Types for verification orchestration
- */
-export type VerificationStepStatus = "pending" | "loading" | "success" | "error";
-
-export interface VerificationStepState {
-  status: VerificationStepStatus;
-  measurement?: AttestationMeasurement;
-  tlsPublicKeyFingerprint?: string;
-  hpkePublicKey?: string;
-  error?: string;
-}
-
-export interface VerificationSecurityState {
-  status: VerificationStepStatus;
-  match?: boolean;
-  error?: string;
-}
-
-export interface VerificationResult {
-  code: VerificationStepState;
-  runtime: VerificationStepState;
-  security: VerificationSecurityState;
-  digest: string;
-}
-
-export interface RunVerificationParams {
-  repo: string;
-  enclaveHost: string;
-  digest?: string;
-  onUpdate?: (state: VerificationResult) => void;
-}
-
-export interface VerifierClient {
-  /**
-   * Wraps WASM verifyEnclave(hostname) and normalizes result into strings
-   */
-  verifyEnclave(hostname: string): Promise<{
-    measurement: AttestationMeasurement;
-    tlsPublicKeyFingerprint: string;
-    hpkePublicKey: string;
-    // Expose raw for advanced consumers without coupling to WebAssembly internals
-    raw?: unknown;
-  }>;
-
-  /**
-   * Wraps WASM verifyCode(repo, digest) and normalizes result into string
-   */
-  verifyCode(repo: string, digest: string): Promise<{
-    measurement: AttestationMeasurement;
-    raw?: unknown;
-  }>;
-
-  /** Retrieve latest release digest for a repo */
-  fetchLatestDigest(repo: string): Promise<string>;
-
-  /** High-level orchestration */
-  runVerification(params: RunVerificationParams): Promise<VerificationResult>;
-
-  /** Subscribe to state updates; returns unsubscribe function */
-  subscribe(listener: (state: VerificationResult) => void): () => void;
-}
-
-/** Extracts a structured AttestationMeasurement from the WASM return value. */
-function parseAttestationMeasurement(input: unknown): AttestationMeasurement {
-  if (input && typeof input === "object") {
-    const obj = input as Record<string, unknown>;
-    const candidate = (obj.measurement ?? obj) as Record<string, unknown>;
-    const typeVal = candidate?.type;
-    const regsVal = candidate?.registers;
-    if (
-      typeof typeVal === "string" &&
-      Array.isArray(regsVal) &&
-      regsVal.every((r) => typeof r === "string")
-    ) {
-      return { type: typeVal, registers: regsVal as string[] };
-    }
-  }
-  throw new Error("Unexpected measurement format from WASM verifier");
-}
-
-function measurementsEqual(a: AttestationMeasurement, b: AttestationMeasurement): boolean {
-  if (a.type !== b.type) return false;
-  if (a.registers.length !== b.registers.length) return false;
-  for (let i = 0; i < a.registers.length; i++) {
-    if (a.registers[i] !== b.registers[i]) return false;
-  }
-  return true;
-}
-
-// key extraction is done inline in verifyEnclave
-
-/**
- * Fetch latest digest from GitHub releases, preserving current regex behavior.
- */
-export async function fetchLatestDigest(repo: string): Promise<string> {
-  const releaseResponse = await fetch(
-    `https://api-github-proxy.tinfoil.sh/repos/${repo}/releases/latest`,
-    {
-      headers: {
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "tinfoil-node-client",
-      },
-    },
-  );
-
-  if (!releaseResponse.ok) {
-    throw new Error(
-      `GitHub API request failed: ${releaseResponse.status} ${releaseResponse.statusText}`,
-    );
-  }
-
-  const releaseData = (await releaseResponse.json()) as { body?: string };
-
-  const eifRegex = /EIF hash: ([a-f0-9]{64})/i;
-  const digestRegex = /Digest: `([a-f0-9]{64})`/;
-
-  const eifMatch = releaseData.body?.match(eifRegex);
-  const digestMatch = releaseData.body?.match(digestRegex);
-
-  if (eifMatch) return eifMatch[1];
-  if (digestMatch) return digestMatch[1];
-  throw new Error("Could not find digest in release notes");
-}
-
-class WasmVerifierClient implements VerifierClient {
-  private listeners = new Set<(state: VerificationResult) => void>();
-  private lastState: VerificationResult | null = null;
-
-  async verifyEnclave(hostname: string): Promise<{
-    measurement: AttestationMeasurement;
-    tlsPublicKeyFingerprint: string;
-    hpkePublicKey: string;
-    raw?: unknown;
-  }> {
-    await Verifier.initializeWasm();
-    if (typeof (globalThis as any).verifyEnclave !== "function") {
-      throw new Error("WASM function verifyEnclave not available");
-    }
-    const raw = await (globalThis as any).verifyEnclave(hostname);
-    const measurement = parseAttestationMeasurement(raw);
-    if (!raw || typeof raw !== "object") {
-      throw new Error("Unexpected response from verifyEnclave");
-    }
-    const tlsPublicKeyFingerprint = (raw as any)["tls_public_key"];
-    const hpkePublicKey = (raw as any)["hpke_public_key"];
-    if (typeof tlsPublicKeyFingerprint !== "string") {
-      throw new Error("Missing tls_public_key in verifyEnclave response");
-    }
-    if (typeof hpkePublicKey !== "string") {
-      throw new Error("Missing hpke_public_key in verifyEnclave response");
-    }
-    return { measurement, tlsPublicKeyFingerprint, hpkePublicKey, raw };
-  }
-
-  async verifyCode(repo: string, digest: string): Promise<{
-    measurement: AttestationMeasurement;
-    raw?: unknown;
-  }> {
-    await Verifier.initializeWasm();
-    if (typeof (globalThis as any).verifyCode !== "function") {
-      throw new Error("WASM function verifyCode not available");
-    }
-    const raw = await (globalThis as any).verifyCode(repo, digest);
-    const measurement = parseAttestationMeasurement(raw);
-    return { measurement, raw };
-  }
-
-  async fetchLatestDigest(repo: string): Promise<string> {
-    return fetchLatestDigest(repo);
-  }
-
-  private emit(state: VerificationResult) {
-    this.lastState = state;
-    for (const listener of this.listeners) {
-      try {
-        listener(state);
-      } catch (err) {
-        // Listener errors should not break flow
-        console.error("VerifierClient listener error:", err);
-      }
-    }
-  }
-
-  subscribe(listener: (state: VerificationResult) => void): () => void {
-    this.listeners.add(listener);
-    if (this.lastState) listener(this.lastState);
-    return () => {
-      this.listeners.delete(listener);
-    };
-  }
-
-  async runVerification(params: RunVerificationParams): Promise<VerificationResult> {
-    const { repo, enclaveHost, onUpdate } = params;
-    let digest = params.digest || "";
-
-    const initial: VerificationResult = {
-      code: { status: "pending" },
-      runtime: { status: "pending" },
-      security: { status: "pending" },
-      digest,
-    };
-    this.emit(initial);
-    if (onUpdate) onUpdate(initial);
-
-    // Ensure WASM loaded upfront
-    await Verifier.initializeWasm();
-
-    // Start runtime attestation immediately
-    const runtimeLoading: VerificationResult = {
-      code: { status: "pending" },
-      runtime: { status: "loading" },
-      security: { status: "pending" },
-      digest,
-    };
-    this.emit(runtimeLoading);
-    if (onUpdate) onUpdate(runtimeLoading);
-
-    const runtimePromise = this
-      .verifyEnclave(enclaveHost)
-      .then((runtime) => ({
-        status: "success" as const,
-        measurement: runtime.measurement,
-        tlsPublicKeyFingerprint: runtime.tlsPublicKeyFingerprint,
-        hpkePublicKey: runtime.hpkePublicKey,
-      }))
-      .catch((err) => ({ status: "error" as const, error: (err as Error).message }));
-
-    // Resolve digest concurrently if not provided
-    const digestPromise = (async () => {
-      if (digest) return digest;
-      return this.fetchLatestDigest(repo);
-    })();
-
-    // Await runtime result
-    const runtimeState = await runtimePromise;
-    const runtimeMeasurement = runtimeState.status === "success" ? runtimeState.measurement! : undefined;
-
-    const afterRuntime: VerificationResult = {
-      code: { status: "pending" },
-      runtime: runtimeState,
-      security: { status: "pending" },
-      digest,
-    };
-    this.emit(afterRuntime);
-    if (onUpdate) onUpdate(afterRuntime);
-
-    // Now ensure digest is available
-    try {
-      digest = await digestPromise;
-    } catch (err) {
-      const state: VerificationResult = {
-        code: { status: "error", error: (err as Error).message },
-        runtime: runtimeState,
-        security: { status: "error", error: "Failed to resolve digest" },
-        digest: "",
-      };
-      this.emit(state);
-      if (onUpdate) onUpdate(state);
-      return state;
-    }
-
-    // Code attestation
-    const codeLoading: VerificationResult = {
-      code: { status: "loading" },
-      runtime: runtimeState,
-      security: { status: "pending" },
-      digest,
-    };
-    this.emit(codeLoading);
-    if (onUpdate) onUpdate(codeLoading);
-
-    const codeState = await this
-      .verifyCode(repo, digest)
-      .then((code) => ({ status: "success" as const, measurement: code.measurement }))
-      .catch((err) => ({ status: "error" as const, error: (err as Error).message }));
-    const codeMeasurement = codeState.status === "success" ? codeState.measurement! : undefined;
-
-    // Security comparison
-    const securityLoading: VerificationResult = {
-      code: codeState,
-      runtime: runtimeState,
-      security: { status: "loading" },
-      digest,
-    };
-    this.emit(securityLoading);
-    if (onUpdate) onUpdate(securityLoading);
-
-    let securityState: VerificationSecurityState;
-    if (codeState.status === "success" && runtimeState.status === "success") {
-      const match = measurementsEqual(codeMeasurement!, runtimeMeasurement!);
-      securityState = match
-        ? { status: "success", match }
-        : { status: "error", match: false, error: "Measurements do not match" };
-    } else {
-      securityState = {
-        status: "error",
-        match: false,
-        error: "Verification steps did not complete successfully",
-      };
-    }
-
-    const finalState: VerificationResult = {
-      code: codeState,
-      runtime: runtimeState,
-      security: securityState,
-      digest,
-    };
-    this.emit(finalState);
-    if (onUpdate) onUpdate(finalState);
-    return finalState;
-  }
-}
-
-/**
- * Bootstraps the Go WASM runtime and returns a ready client instance.
- * Subsequent calls reuse the loaded runtime.
- */
-export async function loadVerifier(wasmUrl?: string): Promise<VerifierClient> {
-  await Verifier.initializeWasm(wasmUrl);
-  return new WasmVerifierClient();
-}
-
-/**
- * Suppress stdout/stderr produced by the Go WASM runtime without affecting the rest of the app logs.
- * Hooks wasm-exec's fs.writeSync (used for Go's stdout/stderr) and stores/restores the original so
- * suppression is scoped only to the WASM-side prints. Can be called before or after WASM initialization.
+ * Control WASM log output
+ * 
+ * The Go WASM runtime outputs logs through a polyfilled fs.writeSync.
+ * This function allows suppressing those logs without affecting other console output.
+ * 
+ * @param suppress - Whether to suppress WASM logs (default: true)
  */
 export function suppressWasmLogs(suppress = true): void {
   (globalThis as any).__tinfoilSuppressWasmLogs = suppress;
@@ -622,4 +459,68 @@ export function suppressWasmLogs(suppress = true): void {
   }
 }
 
+/**
+ * Initialize globals needed for Go WASM runtime
+ * This function sets up browser-like globals that the Go WASM runtime expects
+ */
+function initializeWasmGlobals(): void {
+  // Only initialize once
+  if (Verifier.globalsInitialized) {
+    return;
+  }
+  
+  const globalThis = global as any;
+  
+  // Performance API
+  globalThis.performance = {
+    now: () => Date.now(),
+    markResourceTiming: () => {},
+    mark: () => {},
+    measure: () => {},
+    clearMarks: () => {},
+    clearMeasures: () => {},
+    getEntriesByName: () => [],
+    getEntriesByType: () => [],
+    getEntries: () => [],
+  };
 
+  // Text encoding
+  globalThis.TextEncoder = TextEncoder;
+  globalThis.TextDecoder = TextDecoder;
+
+  // Crypto API (needed by Go WASM)
+  if (!globalThis.crypto) {
+    globalThis.crypto = {
+      getRandomValues: (buffer: Uint8Array) => {
+        const randomBytes = require("crypto").randomBytes(buffer.length);
+        buffer.set(new Uint8Array(randomBytes));
+        return buffer;
+      },
+    };
+  }
+
+  // Default: suppress WASM (Go) stdout/stderr logs unless explicitly enabled by caller
+  if ((globalThis as any).__tinfoilSuppressWasmLogs === undefined) {
+    (globalThis as any).__tinfoilSuppressWasmLogs = true;
+  }
+
+  // Force process to stay running (prevent Go from exiting Node process)
+  // This is a common issue with Go WASM in Node - it calls process.exit()
+  const originalExit = process.exit;
+  // Replace process.exit to prevent the Go WASM runtime from terminating the Node.js process.
+  // When wasm log suppression is enabled, suppress the informational log about the ignored exit
+  // so callers can silence only the WASM-related noise while keeping application logs intact.
+  process.exit = ((code?: number) => {
+    if (!(globalThis as any).__tinfoilSuppressWasmLogs) {
+      console.log(
+        `Process exit called with code ${code} - ignoring to keep Node.js process alive`,
+      );
+    }
+    return undefined as never;
+  }) as any;
+
+  // Load the Go runtime helper
+  require("./wasm-exec.js");
+  
+  Verifier.globalsInitialized = true;
+}
