@@ -38,7 +38,7 @@ describe("Verifier helpers", () => {
             fetch: undiciFetchMock,
           },
         },
-        ["../verifier"],
+        ["../verifier", "../verifier-loader"],
         async () => {
           // Provide minimal Go runtime and WASM exports expected by initializeWasm
           (globalThis as any).Go = class {
@@ -57,16 +57,16 @@ describe("Verifier helpers", () => {
             registers: ["r1", "r2"],
           });
 
-          const { loadVerifier } = await import("../verifier");
+          const { loadVerifier } = await import("../verifier-loader");
           const client = await loadVerifier();
 
           const updates: any[] = [];
-          const unsubscribe = client.subscribe((s) => updates.push(s));
+          const unsubscribe = client.subscribe((s: any) => updates.push(s));
 
           const result = await client.runVerification({
             repo: "owner/repo",
             enclaveHost: "host",
-            onUpdate: (s) => updates.push(s),
+            onUpdate: (s: any) => updates.push(s),
           });
 
           unsubscribe();
@@ -120,7 +120,7 @@ describe("Verifier helpers", () => {
             fetch: undiciFetchMock,
           },
         },
-        ["../verifier"],
+        ["../verifier", "../verifier-loader"],
         async () => {
           (globalThis as any).Go = class {
             importObject: Record<string, unknown> = {};
@@ -137,7 +137,7 @@ describe("Verifier helpers", () => {
             registers: ["r1"],
           });
 
-          const { loadVerifier } = await import("../verifier");
+          const { loadVerifier } = await import("../verifier-loader");
           const client = await loadVerifier();
 
           await assert.rejects(() => client.verifyEnclave("host"), /Missing tls_public_key/);
@@ -176,7 +176,7 @@ describe("Verifier helpers", () => {
             fetch: undiciFetchMock,
           },
         },
-        ["../verifier"],
+        ["../verifier", "../verifier-loader"],
         async () => {
           (globalThis as any).Go = class {
             importObject: Record<string, unknown> = {};
@@ -194,7 +194,7 @@ describe("Verifier helpers", () => {
             registers: ["x"],
           });
 
-          const { loadVerifier } = await import("../verifier");
+          const { loadVerifier } = await import("../verifier-loader");
           const client = await loadVerifier();
           const result = await client.runVerification({ repo: "o/r", enclaveHost: "h" });
 

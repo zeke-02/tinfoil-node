@@ -149,6 +149,7 @@ export class VerifierWithState extends Verifier {
           this.updateState({ digest });
         } catch (error) {
           // If we can't fetch the digest, mark all steps as error
+          this.updateState({ digest: "" }); // Reset digest to empty
           this.updateStepState("code", {
             status: "error",
             error: error instanceof Error ? error.message : "Failed to fetch digest",
