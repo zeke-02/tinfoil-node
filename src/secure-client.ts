@@ -61,6 +61,11 @@ export interface AttestationResponse {
 export class SecureClient {
   private static goInstance: any = null;
   private static initializationPromise: Promise<void> | null = null;
+  private static verificationCache = new Map<string, Promise<AttestationResponse>>();
+
+  public static clearVerificationCache(): void {
+    SecureClient.verificationCache.clear();
+  }
 
   // Values for the Tinfoil inference proxy from config (overridable per instance)
   private readonly enclave: string;
@@ -137,9 +142,15 @@ export class SecureClient {
    * Verifies the integrity of both the code and runtime environment
    */
   public async verify(): Promise<AttestationResponse> {
-    await this.initialize();
+    const cacheKey = `${this.repo}::${this.enclave}`;
+    const cachedResult = SecureClient.verificationCache.get(cacheKey);
+    if (cachedResult) {
+      return cachedResult;
+    }
 
-    try {
+    const verificationPromise = (async () => {
+      await this.initialize();
+
       if (
         typeof globalThis.verifyCode !== "function" ||
         typeof globalThis.verifyEnclave !== "function"
@@ -196,9 +207,14 @@ export class SecureClient {
         hpkePublicKey: attestationResponse.hpke_public_key,
         measurement: attestationResponse.measurement,
       };
-    } catch (error) {
-      throw error;
-    }
+    })();
+
+    SecureClient.verificationCache.set(cacheKey, verificationPromise);
+    verificationPromise.catch(() => {
+      SecureClient.verificationCache.delete(cacheKey);
+    });
+
+    return verificationPromise;
   }
 }
 
