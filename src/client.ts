@@ -10,11 +10,9 @@ import type {
   Moderations,
   Beta,
 } from "openai/resources";
-import { createHash, X509Certificate } from "crypto";
-import { SecureClient, GroundTruth } from "./secure-client";
-import https from "https";
-import { PeerCertificate } from "tls";
+import { SecureClient, AttestationResponse } from "./secure-client";
 import { TINFOIL_CONFIG } from "./config";
+import { createAttestedFetch } from "./attested-fetch";
 
 /**
  * Detects if the code is running in a real browser environment.
@@ -87,24 +85,28 @@ function createAsyncProxy<T extends object>(promise: Promise<T>): T {
 
 /**
  * TinfoilAI is a wrapper around the OpenAI API client that adds additional
- * security measures through enclave verification and certificate fingerprint validation.
+ * security measures through enclave verification and an EHBP-secured transport.
  *
  * It provides:
  * - Automatic verification of Tinfoil secure enclaves
- * - Certificate fingerprint validation for each request
+ * - EHBP-enforced transport security for each request
  * - Type-safe access to OpenAI's chat completion APIs
  */
 
 interface TinfoilAIOptions {
   apiKey?: string;
+  /** Override the inference API base URL */
+  baseURL?: string;
+  /** Override the config GitHub repository */
+  configRepo?: string;
   [key: string]: any; // Allow other OpenAI client options
 }
 
 export class TinfoilAI {
   private client?: OpenAI;
-  private groundTruth?: GroundTruth;
   private clientPromise: Promise<OpenAI>;
   private readyPromise?: Promise<void>;
+  private configRepo?: string;
 
   // Expose properties for compatibility
   public apiKey?: string;
@@ -123,7 +125,9 @@ export class TinfoilAI {
 
     // Store properties for compatibility
     this.apiKey = openAIOptions.apiKey;
-    this.baseURL = TINFOIL_CONFIG.INFERENCE_BASE_URL;
+    this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
+    this.configRepo =
+      options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
     this.clientPromise = this.initClient(openAIOptions);
   }
@@ -152,53 +156,24 @@ export class TinfoilAI {
       Omit<ConstructorParameters<typeof OpenAI>[0], "baseURL">
     > = {},
   ): Promise<OpenAI> {
-    // Verify the enclave and get the certificate fingerprint
-    const secureClient = new SecureClient();
+    // Verify the enclave before establishing a transport
+    const secureClient = new SecureClient({
+      baseURL: this.baseURL,
+      repo: this.configRepo,
+    });
 
+    let attestationResponse: AttestationResponse;
     try {
-      this.groundTruth = await secureClient.verify();
+      attestationResponse = await secureClient.verify();
     } catch (error) {
       throw new Error(`Failed to verify enclave: ${error}`);
     }
-
-    const expectedFingerprint = this.groundTruth.publicKeyFP;
-
-    // Create a custom HTTPS agent that verifies certificate fingerprints
-    const httpsAgent = new https.Agent({
-      rejectUnauthorized: true,
-      checkServerIdentity: (host: string, cert: PeerCertificate) => {
-        if (!cert || !cert.raw) {
-          throw new Error("No certificate found");
-        }
-        if (!cert.pubkey) {
-          throw new Error("No public key found");
-        }
-
-        const pemCert = `-----BEGIN CERTIFICATE-----\n${cert.raw.toString("base64")}\n-----END CERTIFICATE-----`;
-        const x509Cert = new X509Certificate(pemCert);
-        const publicKey = x509Cert.publicKey.export({
-          format: "der",
-          type: "spki",
-        });
-        const publicKeyHash = createHash("sha256")
-          .update(publicKey)
-          .digest("hex");
-
-        if (publicKeyHash !== expectedFingerprint) {
-          throw new Error(
-            `Certificate fingerprint mismatch. Got ${publicKeyHash}, expected ${expectedFingerprint}`,
-          );
-        }
-
-        return undefined; // Validation successful
-      },
-    });
-
-    // Create the OpenAI client with our custom configuration
-    // Note: baseURL will need to be determined by the verification process
+    
+    const hpkePublicKey = attestationResponse.hpkePublicKey;
     const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
       ...options,
-      baseURL: TINFOIL_CONFIG.INFERENCE_BASE_URL,
+      baseURL: this.baseURL,
+      fetch: createAttestedFetch(this.baseURL!, hpkePublicKey),
     };
 
     // Only enable dangerouslyAllowBrowser when we're NOT in a real browser

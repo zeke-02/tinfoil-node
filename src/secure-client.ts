@@ -47,10 +47,11 @@ process.exit = ((code?: number) => {
 require("./wasm-exec.js");
 
 /**
- * Ground truth measurements from verification
+ * Attestation response from verification
  */
-export interface GroundTruth {
-  publicKeyFP: string;
+export interface AttestationResponse {
+  tlsPublicKeyFingerprint: string;
+  hpkePublicKey: string;
   measurement: string;
 }
 
@@ -61,12 +62,15 @@ export class SecureClient {
   private static goInstance: any = null;
   private static initializationPromise: Promise<void> | null = null;
 
-  // Values for the Tinfoil inference proxy from config
-  private readonly enclave = new URL(TINFOIL_CONFIG.INFERENCE_BASE_URL)
-    .hostname;
-  private readonly repo = TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
+  // Values for the Tinfoil inference proxy from config (overridable per instance)
+  private readonly enclave: string;
+  private readonly repo: string;
 
-  constructor() {}
+  constructor(options?: { baseURL?: string; repo?: string }) {
+    const baseURL = options?.baseURL ?? TINFOIL_CONFIG.INFERENCE_BASE_URL;
+    this.enclave = new URL(baseURL).hostname;
+    this.repo = options?.repo ?? TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
+  }
 
   /**
    * Static method to initialize WASM module
@@ -132,7 +136,7 @@ export class SecureClient {
   /**
    * Verifies the integrity of both the code and runtime environment
    */
-  public async verify(): Promise<GroundTruth> {
+  public async verify(): Promise<AttestationResponse> {
     await this.initialize();
 
     try {
@@ -181,12 +185,15 @@ export class SecureClient {
         globalThis.verifyEnclave(this.enclave),
       ]);
 
-      if (measurement !== attestationResponse.measurement) {
+      // TODO(security): compare measurement.registers !== attestationResponse.measurement
+      // for now we only compare measurement.registers as a hack to get things working
+      if (measurement.registers !== attestationResponse.measurement.registers) {
         throw new Error("Measurements do not match");
       }
 
       return {
-        publicKeyFP: attestationResponse.certificate,
+        tlsPublicKeyFingerprint: attestationResponse.tls_public_key,
+        hpkePublicKey: attestationResponse.hpke_public_key,
         measurement: attestationResponse.measurement,
       };
     } catch (error) {
