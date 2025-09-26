@@ -56,15 +56,15 @@ export interface AttestationResponse {
 }
 
 /**
- * SecureClient handles verification of code and runtime measurements using WebAssembly
+ * Verifier handles verification of code and runtime measurements using WebAssembly
  */
-export class SecureClient {
+export class Verifier {
   private static goInstance: any = null;
   private static initializationPromise: Promise<void> | null = null;
   private static verificationCache = new Map<string, Promise<AttestationResponse>>();
 
   public static clearVerificationCache(): void {
-    SecureClient.verificationCache.clear();
+    Verifier.verificationCache.clear();
   }
 
   // Values for the Tinfoil inference proxy from config (overridable per instance)
@@ -82,13 +82,13 @@ export class SecureClient {
    * This starts automatically when the class is loaded
    */
   public static async initializeWasm(): Promise<void> {
-    if (SecureClient.initializationPromise) {
-      return SecureClient.initializationPromise;
+    if (Verifier.initializationPromise) {
+      return Verifier.initializationPromise;
     }
 
-    SecureClient.initializationPromise = (async () => {
+    Verifier.initializationPromise = (async () => {
       try {
-        SecureClient.goInstance = new globalThis.Go();
+        Verifier.goInstance = new globalThis.Go();
 
         const wasmResponse = await fetch(
           "https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm",
@@ -97,9 +97,9 @@ export class SecureClient {
 
         const result = await WebAssembly.instantiate(
           wasmBuffer,
-          SecureClient.goInstance.importObject,
+          Verifier.goInstance.importObject,
         );
-        SecureClient.goInstance.run(result.instance).catch((error: unknown) => {
+        Verifier.goInstance.run(result.instance).catch((error: unknown) => {
           console.error("Go instance failed to run:", error);
           throw error;
         });
@@ -127,7 +127,7 @@ export class SecureClient {
       }
     })();
 
-    return SecureClient.initializationPromise;
+    return Verifier.initializationPromise;
   }
 
   /**
@@ -135,7 +135,7 @@ export class SecureClient {
    * Now just waits for the static initialization to complete
    */
   public async initialize(): Promise<void> {
-    await SecureClient.initializeWasm();
+    await Verifier.initializeWasm();
   }
 
   /**
@@ -143,7 +143,7 @@ export class SecureClient {
    */
   public async verify(): Promise<AttestationResponse> {
     const cacheKey = `${this.repo}::${this.enclave}`;
-    const cachedResult = SecureClient.verificationCache.get(cacheKey);
+    const cachedResult = Verifier.verificationCache.get(cacheKey);
     if (cachedResult) {
       return cachedResult;
     }
@@ -209,9 +209,9 @@ export class SecureClient {
       };
     })();
 
-    SecureClient.verificationCache.set(cacheKey, verificationPromise);
+    Verifier.verificationCache.set(cacheKey, verificationPromise);
     verificationPromise.catch(() => {
-      SecureClient.verificationCache.delete(cacheKey);
+      Verifier.verificationCache.delete(cacheKey);
     });
 
     return verificationPromise;
@@ -219,4 +219,6 @@ export class SecureClient {
 }
 
 // Start initialization as soon as the module loads
-SecureClient.initializeWasm().catch(console.error);
+Verifier.initializeWasm().catch(console.error);
+
+

@@ -1,7 +1,7 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { TINFOIL_CONFIG } from "./config";
 import { createAttestedFetch } from "./attested-fetch";
-import { SecureClient } from "./secure-client";
+import { Verifier } from "./verifier";
 
 /**
  * Creates an AI SDK provider with the specified API key.
@@ -10,7 +10,7 @@ import { SecureClient } from "./secure-client";
  * @returns A TinfoilAI instance
  */
 export async function createTinfoilAI(apiKey: string) {
-  const secureClient = new SecureClient();
+  const secureClient = new Verifier();
   const attestationResponse = await secureClient.verify();
   const hpkePublicKey = attestationResponse.hpkePublicKey;
 

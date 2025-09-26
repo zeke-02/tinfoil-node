@@ -10,7 +10,7 @@ import type {
   Moderations,
   Beta,
 } from "openai/resources";
-import { SecureClient, AttestationResponse } from "./secure-client";
+import { Verifier, AttestationResponse } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
 import { createAttestedFetch } from "./attested-fetch";
 
@@ -157,7 +157,7 @@ export class TinfoilAI {
     > = {},
   ): Promise<OpenAI> {
     // Verify the enclave before establishing a transport
-    const secureClient = new SecureClient({
+    const secureClient = new Verifier({
       baseURL: this.baseURL,
       repo: this.configRepo,
     });

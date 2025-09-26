@@ -2,8 +2,8 @@
 export { TinfoilAI } from "./client";
 export { TinfoilAI as default } from "./client";
 
-// Export secure client and config
-export * from "./secure-client";
+// Export verifier
+export * from "./verifier";
 export * from "./ai-sdk-provider";
 export * from "./config";
 

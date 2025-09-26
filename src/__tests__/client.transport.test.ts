@@ -36,8 +36,8 @@ describe("Secure transport integration", () => {
 
     await withMockedModules(
       {
-        "./secure-client": {
-          SecureClient: class {
+        "./verifier": {
+          Verifier: class {
             verify() {
               return verifyMock();
             }
@@ -92,8 +92,8 @@ describe("Secure transport integration", () => {
 
     await withMockedModules(
       {
-        "./secure-client": {
-          SecureClient: class {
+        "./verifier": {
+          Verifier: class {
             verify() {
               return verifyMock();
             }
