@@ -9,7 +9,7 @@ function makeHex64(): string {
 
 describe("Verifier helpers", () => {
   it("loadVerifier + runVerification success flow with updates", async (t: TestContext) => {
-    const undiciFetchMock = t.mock.fn(async (input: RequestInfo) => {
+    const fetchMock = t.mock.fn(async (input: RequestInfo) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
         return new Response(JSON.stringify({ body: `EIF hash: ${makeHex64()}` }), {
@@ -24,8 +24,10 @@ describe("Verifier helpers", () => {
 
     const originalInstantiateStreaming = WebAssembly.instantiateStreaming;
     const originalInstantiate = WebAssembly.instantiate;
+    const originalFetch = globalThis.fetch;
     (WebAssembly as any).instantiateStreaming = async () => ({ module: {}, instance: {} });
     (WebAssembly as any).instantiate = async () => ({ module: {}, instance: {} });
+    globalThis.fetch = fetchMock as any;
 
     try {
       await withMockedModules(
@@ -33,9 +35,6 @@ describe("Verifier helpers", () => {
           "./wasm-exec.js": {
             default: undefined,
             __esModule: true,
-          },
-          undici: {
-            fetch: undiciFetchMock,
           },
         },
         ["../verifier", "../verifier-loader"],
@@ -71,7 +70,7 @@ describe("Verifier helpers", () => {
 
           unsubscribe();
 
-          assert.strictEqual(undiciFetchMock.mock.callCount() > 0, true);
+          assert.strictEqual(fetchMock.mock.callCount() > 0, true);
           assert.strictEqual(result.security.status, "success");
           assert.strictEqual(result.security.match, true);
           assert.strictEqual(result.runtime.status, "success");
@@ -88,11 +87,12 @@ describe("Verifier helpers", () => {
     } finally {
       (WebAssembly as any).instantiateStreaming = originalInstantiateStreaming;
       (WebAssembly as any).instantiate = originalInstantiate;
+      globalThis.fetch = originalFetch;
     }
   });
 
   it("verifyEnclave throws when keys are missing", async (t: TestContext) => {
-    const undiciFetchMock = t.mock.fn(async (input: RequestInfo) => {
+    const fetchMock = t.mock.fn(async (input: RequestInfo) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
         return new Response(JSON.stringify({ body: `EIF hash: ${makeHex64()}` }), {
@@ -106,8 +106,10 @@ describe("Verifier helpers", () => {
 
     const originalInstantiateStreaming = WebAssembly.instantiateStreaming;
     const originalInstantiate = WebAssembly.instantiate;
+    const originalFetch = globalThis.fetch;
     (WebAssembly as any).instantiateStreaming = async () => ({ module: {}, instance: {} });
     (WebAssembly as any).instantiate = async () => ({ module: {}, instance: {} });
+    globalThis.fetch = fetchMock as any;
 
     try {
       await withMockedModules(
@@ -115,9 +117,6 @@ describe("Verifier helpers", () => {
           "./wasm-exec.js": {
             default: undefined,
             __esModule: true,
-          },
-          undici: {
-            fetch: undiciFetchMock,
           },
         },
         ["../verifier", "../verifier-loader"],
@@ -146,11 +145,12 @@ describe("Verifier helpers", () => {
     } finally {
       (WebAssembly as any).instantiateStreaming = originalInstantiateStreaming;
       (WebAssembly as any).instantiate = originalInstantiate;
+      globalThis.fetch = originalFetch;
     }
   });
 
   it("fetchLatestDigest failure bubbles into runVerification error state", async (t: TestContext) => {
-    const undiciFetchMock = t.mock.fn(async (input: RequestInfo) => {
+    const fetchMock = t.mock.fn(async (input: RequestInfo) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
         return new Response(null, { status: 500, statusText: "Bad" });
@@ -162,8 +162,10 @@ describe("Verifier helpers", () => {
 
     const originalInstantiateStreaming = WebAssembly.instantiateStreaming;
     const originalInstantiate = WebAssembly.instantiate;
+    const originalFetch = globalThis.fetch;
     (WebAssembly as any).instantiateStreaming = async () => ({ module: {}, instance: {} });
     (WebAssembly as any).instantiate = async () => ({ module: {}, instance: {} });
+    globalThis.fetch = fetchMock as any;
 
     try {
       await withMockedModules(
@@ -171,9 +173,6 @@ describe("Verifier helpers", () => {
           "./wasm-exec.js": {
             default: undefined,
             __esModule: true,
-          },
-          undici: {
-            fetch: undiciFetchMock,
           },
         },
         ["../verifier", "../verifier-loader"],
@@ -206,6 +205,7 @@ describe("Verifier helpers", () => {
     } finally {
       (WebAssembly as any).instantiateStreaming = originalInstantiateStreaming;
       (WebAssembly as any).instantiate = originalInstantiate;
+      globalThis.fetch = originalFetch;
     }
   });
 });

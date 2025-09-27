@@ -31,6 +31,38 @@ const completion = await client.chat.completions.create({
 });
 ```
 
+## Browser Support
+
+The SDK supports browser environments. This allows you to use the secure enclave-backed OpenAI API directly from web applications.
+
+### ⚠️ Security Warning
+
+Using API keys directly in the browser exposes them to anyone who can view your page source.
+For production applications, always use a backend server to handle API keys.
+
+### Browser Usage
+
+```javascript
+import TinfoilAI from 'tinfoil';
+
+const client = new TinfoilAI({
+  apiKey: 'your-api-key',
+  dangerouslyAllowBrowser: true // Required for browser usage
+});
+
+const client = await client.ready();
+const completion = await client.chat.completions.create({
+  model: 'llama-free',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+### Browser Requirements
+
+- Modern browsers with ES2020 support
+- WebAssembly support for enclave verification
+
+
 ## Verification helpers
 
 This package exposes verification helpers that load the Go-based WebAssembly verifier once per process and provide structured, stepwise attestation results you can use in applications (e.g., to show progress, log transitions, or gate features).

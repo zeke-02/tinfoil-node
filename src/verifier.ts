@@ -1,6 +1,43 @@
-import { fetch } from "undici";
-import { TextDecoder, TextEncoder } from "util";
 import { TINFOIL_CONFIG } from "./config";
+
+// Use native fetch and TextEncoder/TextDecoder
+// In Node.js, these are available globally since v18
+// In browsers, they're also available globally
+let cachedFetch: typeof fetch | null = null;
+function getFetch(): typeof fetch {
+  if (!cachedFetch) {
+    if (typeof globalThis.fetch !== "function") {
+      throw new Error("fetch is not available in this environment");
+    }
+    cachedFetch = globalThis.fetch.bind(globalThis);
+  }
+  return cachedFetch;
+}
+
+let cachedTextEncoder: typeof TextEncoder | null = null;
+function getTextEncoder(): typeof TextEncoder {
+  if (!cachedTextEncoder) {
+    if (typeof globalThis.TextEncoder !== "function") {
+      throw new Error("TextEncoder is not available in this environment");
+    }
+    cachedTextEncoder = globalThis.TextEncoder;
+  }
+  return cachedTextEncoder;
+}
+
+let cachedTextDecoder: typeof TextDecoder | null = null;
+function getTextDecoder(): typeof TextDecoder {
+  if (!cachedTextDecoder) {
+    if (typeof globalThis.TextDecoder !== "function") {
+      throw new Error("TextDecoder is not available in this environment");
+    }
+    cachedTextDecoder = globalThis.TextDecoder;
+  }
+  return cachedTextDecoder;
+}
+
+const nodeRequire = createNodeRequire();
+let wasmExecLoader: Promise<void> | null = null;
 
 // Extend globalThis for Go WASM types
 declare const globalThis: {
@@ -139,12 +176,13 @@ export class Verifier {
     Verifier.initializationPromise = (async () => {
       try {
         // Initialize globals if not already done
-        initializeWasmGlobals();
+        await initializeWasmGlobals();
         
         Verifier.goInstance = new globalThis.Go();
 
         // Load WASM module
-        const wasmResponse = await fetch(Verifier.defaultWasmUrl);
+        const fetchFn = getFetch();
+        const wasmResponse = await fetchFn(Verifier.defaultWasmUrl);
         if (!wasmResponse.ok) {
           throw new Error(`Failed to fetch WASM: ${wasmResponse.status} ${wasmResponse.statusText}`);
         }
@@ -193,7 +231,8 @@ export class Verifier {
   public async fetchLatestDigest(repo?: string): Promise<string> {
     const targetRepo = repo || this.repo;
     
-    const releaseResponse = await fetch(
+    const fetchFn = getFetch();
+    const releaseResponse = await fetchFn(
       `https://api-github-proxy.tinfoil.sh/repos/${targetRepo}/releases/latest`,
       {
         headers: {
@@ -346,7 +385,8 @@ export class Verifier {
       }
 
       // Fetch the latest release digest
-      const releaseResponse = await fetch(
+      const fetchFn = getFetch();
+      const releaseResponse = await fetchFn(
         `https://api-github-proxy.tinfoil.sh/repos/${this.repo}/releases/latest`,
         {
           headers: {
@@ -471,64 +511,167 @@ export function suppressWasmLogs(suppress = true): void {
  * Initialize globals needed for Go WASM runtime
  * This function sets up browser-like globals that the Go WASM runtime expects
  */
-function initializeWasmGlobals(): void {
+async function initializeWasmGlobals(): Promise<void> {
   // Only initialize once
   if (Verifier.globalsInitialized) {
     return;
   }
-  
-  const globalThis = global as any;
-  
-  // Performance API
-  globalThis.performance = {
-    now: () => Date.now(),
-    markResourceTiming: () => {},
-    mark: () => {},
-    measure: () => {},
-    clearMarks: () => {},
-    clearMeasures: () => {},
-    getEntriesByName: () => [],
-    getEntriesByType: () => [],
-    getEntries: () => [],
-  };
 
-  // Text encoding
-  globalThis.TextEncoder = TextEncoder;
-  globalThis.TextDecoder = TextDecoder;
+  const root = globalThis as any;
 
-  // Crypto API (needed by Go WASM)
-  if (!globalThis.crypto) {
-    globalThis.crypto = {
-      getRandomValues: (buffer: Uint8Array) => {
-        const randomBytes = require("crypto").randomBytes(buffer.length);
-        buffer.set(new Uint8Array(randomBytes));
-        return buffer;
-      },
+  // Performance API (Go runtime expects a few methods to exist)
+  if (!root.performance) {
+    root.performance = {
+      now: () => Date.now(),
+      markResourceTiming: () => {},
+      mark: () => {},
+      measure: () => {},
+      clearMarks: () => {},
+      clearMeasures: () => {},
+      getEntriesByName: () => [],
+      getEntriesByType: () => [],
+      getEntries: () => [],
     };
+  } else {
+    root.performance.now = root.performance.now ?? (() => Date.now());
+    root.performance.markResourceTiming = root.performance.markResourceTiming ?? (() => {});
+    root.performance.mark = root.performance.mark ?? (() => {});
+    root.performance.measure = root.performance.measure ?? (() => {});
+    root.performance.clearMarks = root.performance.clearMarks ?? (() => {});
+    root.performance.clearMeasures = root.performance.clearMeasures ?? (() => {});
+    root.performance.getEntriesByName = root.performance.getEntriesByName ?? (() => []);
+    root.performance.getEntriesByType = root.performance.getEntriesByType ?? (() => []);
+    root.performance.getEntries = root.performance.getEntries ?? (() => []);
   }
 
+  // Text encoding
+  if (!root.TextEncoder) {
+    root.TextEncoder = getTextEncoder();
+  }
+  if (!root.TextDecoder) {
+    root.TextDecoder = getTextDecoder();
+  }
+
+  // Crypto API (needed by Go WASM)
+  ensureCrypto(root);
+
   // Default: suppress WASM (Go) stdout/stderr logs unless explicitly enabled by caller
-  if ((globalThis as any).__tinfoilSuppressWasmLogs === undefined) {
-    (globalThis as any).__tinfoilSuppressWasmLogs = true;
+  if (typeof root.__tinfoilSuppressWasmLogs === "undefined") {
+    root.__tinfoilSuppressWasmLogs = true;
   }
 
   // Force process to stay running (prevent Go from exiting Node process)
   // This is a common issue with Go WASM in Node - it calls process.exit()
-  const originalExit = process.exit;
-  // Replace process.exit to prevent the Go WASM runtime from terminating the Node.js process.
-  // When wasm log suppression is enabled, suppress the informational log about the ignored exit
-  // so callers can silence only the WASM-related noise while keeping application logs intact.
-  process.exit = ((code?: number) => {
-    if (!(globalThis as any).__tinfoilSuppressWasmLogs) {
-      console.log(
-        `Process exit called with code ${code} - ignoring to keep Node.js process alive`,
-      );
-    }
-    return undefined as never;
-  }) as any;
+  if (root.process && typeof root.process.exit === "function" && !root.__tinfoilProcessExitPatched) {
+    root.__tinfoilProcessExitPatched = true;
+    const originalExit = root.process.exit.bind(root.process);
+    root.__tinfoilOriginalProcessExit = originalExit;
+    // Replace process.exit to prevent the Go WASM runtime from terminating the Node.js process.
+    // When wasm log suppression is enabled, suppress the informational log about the ignored exit
+    // so callers can silence only the WASM-related noise while keeping application logs intact.
+    root.process.exit = ((code?: number) => {
+      if (!root.__tinfoilSuppressWasmLogs) {
+        console.log(`Process exit called with code ${code} - ignoring to keep runtime alive`);
+      }
+      return undefined as never;
+    }) as any;
+  }
 
-  // Load the Go runtime helper
-  require("./wasm-exec.js");
-  
+  await loadWasmExec();
+
   Verifier.globalsInitialized = true;
+}
+
+function ensureCrypto(root: Record<string, any>): void {
+  const hasWorkingGetRandomValues =
+    root.crypto && typeof root.crypto.getRandomValues === "function"
+      ? root.crypto
+      : resolveWindowCrypto(root);
+
+  if (hasWorkingGetRandomValues) {
+    if (!root.crypto) {
+      root.crypto = hasWorkingGetRandomValues;
+    }
+    return;
+  }
+
+  const nodeRandomBytes = resolveNodeRandomBytes();
+  if (!nodeRandomBytes) {
+    throw new Error("crypto.getRandomValues is not available in this environment");
+  }
+
+  const fallbackCrypto = {
+    getRandomValues: (buffer: Uint8Array) => {
+      const bytes = nodeRandomBytes(buffer.length);
+      buffer.set(bytes);
+      return buffer;
+    },
+  };
+
+  try {
+    root.crypto = fallbackCrypto;
+  } catch {
+    Object.defineProperty(root, "crypto", {
+      configurable: true,
+      enumerable: false,
+      value: fallbackCrypto,
+      writable: false,
+    });
+  }
+}
+
+function resolveWindowCrypto(root: Record<string, any>): Crypto | undefined {
+  const maybeWindow = root.window ?? (typeof window !== "undefined" ? window : undefined);
+  if (maybeWindow?.crypto && typeof maybeWindow.crypto.getRandomValues === "function") {
+    return maybeWindow.crypto;
+  }
+  return undefined;
+}
+
+function resolveNodeRandomBytes(): ((size: number) => Uint8Array) | undefined {
+  if (!nodeRequire) {
+    return undefined;
+  }
+
+  try {
+    const cryptoModule = nodeRequire("crypto") as { randomBytes?: (size: number) => Uint8Array } | undefined;
+    const randomBytes = typeof cryptoModule?.randomBytes === "function" ? cryptoModule.randomBytes : undefined;
+    if (randomBytes) {
+      return (size: number) => {
+        const result = randomBytes(size);
+        return result instanceof Uint8Array ? result : new Uint8Array(result);
+      };
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+function loadWasmExec(): Promise<void> {
+  if (!wasmExecLoader) {
+    wasmExecLoader = (async () => {
+      if (nodeRequire) {
+        nodeRequire("./wasm-exec.js");
+        return;
+      }
+
+      await import("./wasm-exec.js");
+    })();
+
+    wasmExecLoader.catch(() => {
+      wasmExecLoader = null;
+    });
+  }
+
+  return wasmExecLoader;
+}
+
+function createNodeRequire(): ((id: string) => any) | undefined {
+  try {
+    return typeof require === "function" ? require : undefined;
+  } catch {
+    return undefined;
+  }
 }
