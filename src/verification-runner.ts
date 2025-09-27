@@ -258,3 +258,5 @@ export async function loadVerifier(wasmUrl?: string): Promise<VerifierWithState>
 
 // Re-export utilities
 export { suppressWasmLogs, TINFOIL_CONFIG };
+
+

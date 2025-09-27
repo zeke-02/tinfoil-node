@@ -55,6 +55,7 @@ export interface AttestationMeasurement {
 }
 
 // Platform type constants
+// See https://github.com/tinfoilsh/verifier/
 const PLATFORM_TYPES = {
   SNP_TDX_MULTI_PLATFORM_V1: 'https://tinfoil.sh/predicate/snp-tdx-multiplatform/v1',
   TDX_GUEST_V1: 'https://tinfoil.sh/predicate/tdx-guest/v1',

@@ -69,7 +69,7 @@ This package exposes verification helpers that load the Go-based WebAssembly ver
 
 The verification functionality is split into two modules:
 - `verifier.ts`: Core verification logic with low-level attestation methods
-- `verifier-loader.ts`: Higher-level orchestration with state management and subscriptions
+- `verification-runner.ts`: Higher-level orchestration with state management and subscriptions
 
 ### Core Verifier API
 

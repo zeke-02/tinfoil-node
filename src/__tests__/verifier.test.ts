@@ -37,7 +37,7 @@ describe("Verifier helpers", () => {
             __esModule: true,
           },
         },
-        ["../verifier", "../verifier-loader"],
+        ["../verifier", "../verification-runner"],
         async () => {
           // Provide minimal Go runtime and WASM exports expected by initializeWasm
           (globalThis as any).Go = class {
@@ -56,7 +56,7 @@ describe("Verifier helpers", () => {
             registers: ["r1", "r2"],
           });
 
-          const { loadVerifier } = await import("../verifier-loader");
+          const { loadVerifier } = await import("../verification-runner");
           const client = await loadVerifier();
 
           const updates: any[] = [];
@@ -119,7 +119,7 @@ describe("Verifier helpers", () => {
             __esModule: true,
           },
         },
-        ["../verifier", "../verifier-loader"],
+        ["../verifier", "../verification-runner"],
         async () => {
           (globalThis as any).Go = class {
             importObject: Record<string, unknown> = {};
@@ -136,7 +136,7 @@ describe("Verifier helpers", () => {
             registers: ["r1"],
           });
 
-          const { loadVerifier } = await import("../verifier-loader");
+          const { loadVerifier } = await import("../verification-runner");
           const client = await loadVerifier();
 
           await assert.rejects(() => client.verifyEnclave("host"), /Missing tls_public_key/);
@@ -175,7 +175,7 @@ describe("Verifier helpers", () => {
             __esModule: true,
           },
         },
-        ["../verifier", "../verifier-loader"],
+        ["../verifier", "../verification-runner"],
         async () => {
           (globalThis as any).Go = class {
             importObject: Record<string, unknown> = {};
@@ -193,7 +193,7 @@ describe("Verifier helpers", () => {
             registers: ["x"],
           });
 
-          const { loadVerifier } = await import("../verifier-loader");
+          const { loadVerifier } = await import("../verification-runner");
           const client = await loadVerifier();
           const result = await client.runVerification({ repo: "o/r", enclaveHost: "h" });
 
