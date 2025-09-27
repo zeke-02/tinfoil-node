@@ -1,3 +1,63 @@
+/**
+ * VERIFIER COMPONENT OVERVIEW
+ * ==========================
+ *
+ * This implementation performs three security checks entirely on the client using
+ * a Go WebAssembly module, and exposes a small TypeScript API around it.
+ *
+ * 1) REMOTE ATTESTATION (Enclave Verification)
+ *    - Invokes Go WASM `verifyEnclave(host)` against the target enclave hostname
+ *    - Verifies vendor certificate chains inside WASM (AMD SEV-SNP / Intel TDX)
+ *    - Returns the enclave's runtime measurement and public keys (TLS fingerprint, HPKE)
+ *
+ * 2) CODE INTEGRITY (Release Verification)
+ *    - Fetches the latest release notes via the Tinfoil GitHub proxy and extracts a digest
+ *      (endpoint: https://api-github-proxy.tinfoil.sh)
+ *    - Invokes Go WASM `verifyCode(repo, digest)` to obtain the expected code measurement
+ *    - The Go implementation verifies provenance using Sigstore/Rekor for GitHub Actions builds
+ *
+ * 3) CODE CONSISTENCY (Measurement Comparison)
+ *    - Compares the runtime measurement with the expected code measurement using
+ *      platform-aware rules implemented in `compareMeasurements()`
+ *      - Multi-platform ↔ Multi-platform: all registers must match
+ *      - Multi-platform → TDX: RTMR1 and RTMR2 must match
+ *      - Multi-platform → SEV-SNP: SNP measurement (first register) must match
+ *      - Same platform types: all registers must match
+ *
+ * VERIFICATION MODE
+ * - Audit-time verification: runs out-of-band before/alongside data-plane usage
+ * - Relies on attestation and certificate transparency for a durable audit trail
+ *
+ * RUNTIME AND DELIVERY
+ * - All verification executes locally via WebAssembly (Go → WASM)
+ * - WASM loader: `wasm-exec.js`
+ * - WASM module URL: https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm
+ * - Works in Node 18+ and modern browsers with lightweight polyfills for
+ *   `performance`, `TextEncoder`/`TextDecoder`, and `crypto.getRandomValues`
+ * - Go stdout/stderr is suppressed by default; toggle via `suppressWasmLogs()`
+ * - Successful end-to-end results are cached per `repo::enclave` for the process lifetime
+ * - Module auto-initializes the WASM runtime on import
+ *
+ * PROXIES AND TRUST
+ * - GitHub proxy is used only to avoid rate limits; the WASM logic independently
+ *   validates release provenance via Sigstore transparency logs
+ * - AMD KDS access may be proxied within the WASM for availability; AMD roots are
+ *   embedded and the full chain is verified in Go to prevent forgery
+ *
+ * SUPPORTED PLATFORMS AND PREDICATES
+ * - Predicate types supported by this client: SNP/TDX multi-platform v1,
+ *   TDX guest v1, SEV-SNP guest v2
+ * - See `compareMeasurements()` for exact register mapping rules
+ *
+ * PUBLIC API (this module)
+ * - `new Verifier({ baseURL?, repo? })`
+ * - `verify()` → full end-to-end verification and attestation response
+ * - `verifyEnclave(host?)` → runtime attestation only
+ * - `verifyCode(repo, digest)` → expected measurement for a specific release
+ * - `compareMeasurements(code, runtime)` → predicate-based comparison
+ * - `fetchLatestDigest(repo?)` → release digest via proxy
+ * - `suppressWasmLogs(suppress?)` → control WASM log output
+ */
 import { TINFOIL_CONFIG } from "./config";
 
 // Use native fetch and TextEncoder/TextDecoder
@@ -230,6 +290,12 @@ export class Verifier {
    * @returns The digest hash
    */
   public async fetchLatestDigest(repo?: string): Promise<string> {
+    // GitHub Proxy Note:
+    // We use api-github-proxy.tinfoil.sh instead of the direct GitHub API to avoid
+    // rate limiting that could degrade UX. The proxy caches responses while the
+    // integrity of the data is independently verified in `verifyCode` via
+    // Sigstore transparency logs (Rekor). Using the proxy therefore does not
+    // weaken security.
     const targetRepo = repo || this.repo;
     
     const fetchFn = getFetch();
