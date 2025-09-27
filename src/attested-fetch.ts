@@ -2,22 +2,42 @@ import type { Transport as EhbpTransport } from "ehbp";
 
 type EhbpModule = typeof import("ehbp");
 
-const dynamicImport = new Function(
-  "specifier",
-  "return import(specifier);",
-) as (specifier: string) => Promise<EhbpModule>;
-
 const transportCache = new Map<string, Promise<EhbpTransport>>();
 
 let ehbpModulePromise: Promise<EhbpModule> | null = null;
 let ehbpModuleOverride: EhbpModule | undefined;
 
+// Detect if we're in a real browser (not Node.js)
+function isBrowser(): boolean {
+  return typeof window !== 'undefined' &&
+         typeof window.document !== 'undefined' &&
+         typeof process === 'undefined';
+}
+
+/**
+ * Load the ESM-only `ehbp` module in both browsers and Node.js CommonJS tests.
+ *
+ * - Browsers/Next.js: use a standard dynamic import so bundlers can statically
+ *   include `ehbp` in the client bundle.
+ * - Node.js (CJS tests/builds): avoid TypeScript transpiling import() to
+ *   require(), which throws ERR_REQUIRE_ESM. Instead, create a runtime
+ *   dynamic import via new Function so it remains a real import() call.
+ */
 function getEhbpModule(): Promise<EhbpModule> {
   if (ehbpModuleOverride) {
     return Promise.resolve(ehbpModuleOverride);
   }
   if (!ehbpModulePromise) {
-    ehbpModulePromise = dynamicImport("ehbp");
+    if (isBrowser()) {
+      // Let the bundler include the module in browser builds
+      ehbpModulePromise = import("ehbp");
+    } else {
+      const dynamicImport = new Function(
+        "specifier",
+        "return import(specifier);",
+      ) as (specifier: string) => Promise<EhbpModule>;
+      ehbpModulePromise = dynamicImport("ehbp");
+    }
   }
   return ehbpModulePromise;
 }
@@ -43,6 +63,19 @@ async function getTransportForOrigin(origin: string): Promise<EhbpTransport> {
 
   const transportPromise = (async () => {
     const { Identity, createTransport } = await getEhbpModule();
+    
+    // Ensure we're in a secure context with WebCrypto Subtle available (required by EHBP)
+    if (typeof globalThis !== 'undefined') {
+      const isSecure = (globalThis as any).isSecureContext !== false;
+      const hasSubtle = !!(globalThis.crypto && (globalThis.crypto as Crypto).subtle);
+      if (!isSecure || !hasSubtle) {
+        const reason = !isSecure
+          ? 'insecure context (use HTTPS or localhost)'
+          : 'missing WebCrypto SubtleCrypto';
+        throw new Error(`EHBP requires a secure browser context: ${reason}`);
+      }
+    }
+    
     const clientIdentity = await Identity.generate();
     return createTransport(origin, clientIdentity);
   })().catch((error) => {

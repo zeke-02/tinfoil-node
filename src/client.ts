@@ -10,7 +10,8 @@ import type {
   Moderations,
   Beta,
 } from "openai/resources";
-import { Verifier, AttestationResponse } from "./verifier";
+import { Verifier } from "./verifier";
+import type { AttestationResponse } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
 import { createAttestedFetch } from "./attested-fetch";
 

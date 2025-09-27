@@ -652,12 +652,17 @@ function resolveNodeRandomBytes(): ((size: number) => Uint8Array) | undefined {
 function loadWasmExec(): Promise<void> {
   if (!wasmExecLoader) {
     wasmExecLoader = (async () => {
-      if (nodeRequire) {
-        nodeRequire("./wasm-exec.js");
-        return;
+      // Prefer a dynamic import so bundlers (Next/Webpack/Vite) include the file.
+      // If that fails (e.g., pure Node without bundler), fall back to require.
+      try {
+        await import("./wasm-exec.js");
+      } catch {
+        if (nodeRequire) {
+          nodeRequire("./wasm-exec.js");
+          return;
+        }
+        throw new Error("Failed to load wasm-exec.js via dynamic import, and require() is unavailable");
       }
-
-      await import("./wasm-exec.js");
     })();
 
     wasmExecLoader.catch(() => {

@@ -1,6 +1,7 @@
 import { loadVerifier, suppressWasmLogs, TINFOIL_CONFIG } from "../../src";
 import { fmt } from "./ansi";
-import { InlineBlock, buildLines, RenderableState } from "./verification-ui";
+import { InlineBlock, buildLines } from "./verification-ui";
+import type { RenderableState } from "./verification-ui";
 
 /**
  * Runs the enclave/code verification demo with a small inline progress UI.
