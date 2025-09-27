@@ -176,10 +176,9 @@ export class TinfoilAI {
       fetch: createAttestedFetch(this.baseURL!, hpkePublicKey),
     };
 
-    // Only enable dangerouslyAllowBrowser when we're NOT in a real browser
-    // This prevents API key exposure if code is ever bundled for browser use
-    if (!isRealBrowser()) {
-      // We're in Node.js with WASM, which makes OpenAI SDK think we're in a browser
+    // Enable dangerouslyAllowBrowser in Node.js with WASM (which makes OpenAI SDK think we're in a browser)
+    // OR if explicitly set by the user (for legitimate browser usage like playgrounds)
+    if (!isRealBrowser() || (options as any).dangerouslyAllowBrowser === true) {
       clientOptions.dangerouslyAllowBrowser = true;
     }
 
