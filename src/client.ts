@@ -19,27 +19,7 @@ import { createAttestedFetch } from "./attested-fetch";
  * Detects if the code is running in a real browser environment.
  * Returns false for Node.js environments, even with WASM loaded.
  */
-function isRealBrowser(): boolean {
-  // Check for Node.js-specific globals that wouldn't exist in a real browser
-  if (
-    typeof process !== "undefined" &&
-    process.versions &&
-    process.versions.node
-  ) {
-    return false; // Definitely Node.js
-  }
-
-  // Check for browser-specific window object AND ensure it's not a Node.js global mock
-  if (typeof window !== "undefined" && typeof window.document !== "undefined") {
-    // Additional check: real browsers have navigator.userAgent
-    if (typeof navigator !== "undefined" && navigator.userAgent) {
-      return true; // Likely a real browser
-    }
-  }
-
-  // Default to safe: assume it's not a browser (Node.js with WASM)
-  return false;
-}
+import { isRealBrowser } from "./env";
 
 /**
  * Creates a proxy that allows property access and method calls on a Promise before it resolves.

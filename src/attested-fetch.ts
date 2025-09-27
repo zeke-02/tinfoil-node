@@ -1,4 +1,5 @@
 import type { Transport as EhbpTransport } from "ehbp";
+import { isRealBrowser } from "./env";
 
 type EhbpModule = typeof import("ehbp");
 
@@ -8,11 +9,7 @@ let ehbpModulePromise: Promise<EhbpModule> | null = null;
 let ehbpModuleOverride: EhbpModule | undefined;
 
 // Detect if we're in a real browser (not Node.js)
-function isBrowser(): boolean {
-  return typeof window !== 'undefined' &&
-         typeof window.document !== 'undefined' &&
-         typeof process === 'undefined';
-}
+// Reuse our cross-platform browser detection
 
 /**
  * Load the ESM-only `ehbp` module in both browsers and Node.js CommonJS tests.
@@ -28,7 +25,7 @@ function getEhbpModule(): Promise<EhbpModule> {
     return Promise.resolve(ehbpModuleOverride);
   }
   if (!ehbpModulePromise) {
-    if (isBrowser()) {
+    if (isRealBrowser()) {
       // Let the bundler include the module in browser builds
       ehbpModulePromise = import("ehbp");
     } else {
