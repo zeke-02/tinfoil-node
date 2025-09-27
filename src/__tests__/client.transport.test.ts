@@ -9,7 +9,7 @@ describe("Secure transport integration", () => {
     const verifyMock = t.mock.fn(async () => ({
       tlsPublicKeyFingerprint: "fingerprint",
       hpkePublicKey: "mock-hpke-public-key",
-      measurement: "measurement",
+      measurement: { type: "eif", registers: [] },
     }));
     const mockFetch = t.mock.fn(async () => new Response(null));
     const createAttestedFetchMock = t.mock.fn(
@@ -80,7 +80,7 @@ describe("Secure transport integration", () => {
     const verifyMock = t.mock.fn(async () => ({
       tlsPublicKeyFingerprint: "fingerprint",
       hpkePublicKey: "mock-hpke-public-key",
-      measurement: "measurement",
+      measurement: { type: "eif", registers: [] },
     }));
     const mockFetch = t.mock.fn(async () => new Response(null));
     const createAttestedFetchMock = t.mock.fn(

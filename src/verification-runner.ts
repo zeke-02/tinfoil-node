@@ -1,4 +1,5 @@
-import { Verifier, compareMeasurements, AttestationMeasurement, suppressWasmLogs } from "./verifier";
+import { Verifier, compareMeasurements, suppressWasmLogs } from "./verifier";
+import type { AttestationMeasurement } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
 
 /**
@@ -71,6 +72,16 @@ export class VerifierWithState extends Verifier {
   
   // Subscribers
   private subscribers: Set<(state: VerificationState) => void> = new Set();
+  
+  // Static cache for deduplicating verifications
+  private static runnerVerificationCache = new Map<string, Promise<VerificationResult>>();
+  
+  /**
+   * Clear the verification cache
+   */
+  public static clearVerificationCache(): void {
+    VerifierWithState.runnerVerificationCache.clear();
+  }
 
   /**
    * Subscribe to verification state updates
@@ -119,52 +130,84 @@ export class VerifierWithState extends Verifier {
     const enclaveHost = options?.enclaveHost || new URL(TINFOIL_CONFIG.INFERENCE_BASE_URL).hostname;
     let digest = options?.digest || "";
     
-    // Reset state
-    this.updateState({
-      digest: "",
-      runtime: { status: "pending" },
-      code: { status: "pending" },
-      security: { status: "pending" },
-    });
-    
-    // Notify onUpdate callback if provided
-    if (options?.onUpdate) {
-      const unsubscribe = this.subscribe(options.onUpdate);
-      // Clean up after completion
-      const originalPromise = this._runVerificationInternal(repo, enclaveHost, digest);
-      originalPromise.finally(() => unsubscribe());
-      return originalPromise;
+    // If no digest provided, we need to fetch it first before checking cache
+    if (!digest) {
+      // Reset state for fresh verification
+      this.updateState({
+        digest: "resolving...",
+        runtime: { status: "pending" },
+        code: { status: "pending" },
+        security: { status: "pending" },
+      });
+      
+      try {
+        digest = await this.fetchLatestDigest(repo);
+        this.updateState({ digest });
+      } catch (error) {
+        // If we can't fetch the digest, mark all steps as error
+        this.updateState({ digest: "" });
+        this.updateStepState("code", {
+          status: "error",
+          error: error instanceof Error ? error.message : "Failed to fetch digest",
+        });
+        this.updateStepState("runtime", {
+          status: "error",
+          error: "Cannot proceed without digest",
+        });
+        this.updateStepState("security", {
+          status: "error",
+          error: "Cannot proceed without digest",
+        });
+        return this.state;
+      }
     }
     
-    return this._runVerificationInternal(repo, enclaveHost, digest);
+    // Now we have a digest, check cache
+    const cacheKey = `${repo}::${enclaveHost}::${digest}`;
+    const cachedPromise = VerifierWithState.runnerVerificationCache.get(cacheKey);
+    
+    if (cachedPromise) {
+      // Reuse cached promise, but still subscribe to updates if requested
+      if (options?.onUpdate) {
+        const unsubscribe = this.subscribe(options.onUpdate);
+        cachedPromise.finally(() => unsubscribe());
+      }
+      return cachedPromise;
+    }
+    
+    // No cached result, create new verification promise
+    const verificationPromise = this._runVerificationInternal(repo, enclaveHost, digest)
+      .then(result => {
+        // Successful verification stays in cache
+        return result;
+      })
+      .catch(error => {
+        // On error, evict from cache
+        VerifierWithState.runnerVerificationCache.delete(cacheKey);
+        throw error;
+      });
+    
+    // Store in cache
+    VerifierWithState.runnerVerificationCache.set(cacheKey, verificationPromise);
+    
+    // Handle updates if requested
+    if (options?.onUpdate) {
+      const unsubscribe = this.subscribe(options.onUpdate);
+      verificationPromise.finally(() => unsubscribe());
+    }
+    
+    return verificationPromise;
   }
   
   private async _runVerificationInternal(repo: string, enclaveHost: string, digest: string): Promise<VerificationResult> {
     try {
-      // Step 1: Fetch digest if not provided
-      if (!digest) {
-        this.updateState({ digest: "resolving..." });
-        try {
-          digest = await this.fetchLatestDigest(repo);
-          this.updateState({ digest });
-        } catch (error) {
-          // If we can't fetch the digest, mark all steps as error
-          this.updateState({ digest: "" }); // Reset digest to empty
-          this.updateStepState("code", {
-            status: "error",
-            error: error instanceof Error ? error.message : "Failed to fetch digest",
-          });
-          this.updateStepState("runtime", {
-            status: "error",
-            error: "Cannot proceed without digest",
-          });
-          this.updateStepState("security", {
-            status: "error",
-            error: "Cannot proceed without digest",
-          });
-          return this.state;
-        }
-      }
+      // Reset state for this verification
+      this.updateState({
+        digest,
+        runtime: { status: "pending" },
+        code: { status: "pending" },
+        security: { status: "pending" },
+      });
       
       // Step 2: Runtime attestation
       this.updateStepState("runtime", { status: "loading" });
@@ -259,4 +302,10 @@ export async function loadVerifier(wasmUrl?: string): Promise<VerifierWithState>
 // Re-export utilities
 export { suppressWasmLogs, TINFOIL_CONFIG };
 
+/**
+ * Clear the verification cache
+ */
+export function clearVerificationCache(): void {
+  VerifierWithState.clearVerificationCache();
+}
 
