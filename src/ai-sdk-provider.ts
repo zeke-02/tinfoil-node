@@ -10,8 +10,8 @@ import { Verifier } from "./verifier";
  * @returns A TinfoilAI instance
  */
 export async function createTinfoilAI(apiKey: string) {
-  const secureClient = new Verifier();
-  const attestationResponse = await secureClient.verify();
+  const verifier = new Verifier();
+  const attestationResponse = await verifier.verify();
   const hpkePublicKey = attestationResponse.hpkePublicKey;
 
   const attestedFetch = createAttestedFetch(TINFOIL_CONFIG.INFERENCE_BASE_URL, hpkePublicKey);

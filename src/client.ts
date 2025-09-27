@@ -138,14 +138,14 @@ export class TinfoilAI {
     > = {},
   ): Promise<OpenAI> {
     // Verify the enclave before establishing a transport
-    const secureClient = new Verifier({
+    const verifier = new Verifier({
       baseURL: this.baseURL,
       repo: this.configRepo,
     });
 
     let attestationResponse: AttestationResponse;
     try {
-      attestationResponse = await secureClient.verify();
+      attestationResponse = await verifier.verify();
     } catch (error) {
       throw new Error(`Failed to verify enclave: ${error}`);
     }
