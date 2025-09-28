@@ -19,20 +19,12 @@
  * 3) CODE CONSISTENCY (Measurement Comparison)
  *    - Compares the runtime measurement with the expected code measurement using
  *      platform-aware rules implemented in `compareMeasurements()`
- *      - Multi-platform ↔ Multi-platform: all registers must match
- *      - Multi-platform → TDX: RTMR1 and RTMR2 must match
- *      - Multi-platform → SEV-SNP: SNP measurement (first register) must match
- *      - Same platform types: all registers must match
- *
- * VERIFICATION MODE
- * - Audit-time verification: runs out-of-band before/alongside data-plane usage
- * - Relies on attestation and certificate transparency for a durable audit trail
  *
  * RUNTIME AND DELIVERY
  * - All verification executes locally via WebAssembly (Go → WASM)
  * - WASM loader: `wasm-exec.js`
  * - WASM module URL: https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm
- * - Works in Node 18+ and modern browsers with lightweight polyfills for
+ * - Works in Node 20.18.1+ and modern browsers with lightweight polyfills for
  *   `performance`, `TextEncoder`/`TextDecoder`, and `crypto.getRandomValues`
  * - Go stdout/stderr is suppressed by default; toggle via `suppressWasmLogs()`
  * - Successful end-to-end results are cached per `repo::enclave` for the process lifetime
@@ -132,15 +124,18 @@ export interface AttestationResponse {
 }
 
 /**
- * Compare two measurements according to platform-specific rules
- * This is predicate function for comparing attestation measurements
- * taken from https://github.com/tinfoilsh/verifier/blob/main/attestation/attestation.go
- * 
- * @param codeMeasurement - Expected measurement from code attestation
- * @param runtimeMeasurement - Actual measurement from runtime attestation
- * @returns true if measurements match according to platform rules
- */
-export function compareMeasurements(codeMeasurement: AttestationMeasurement, runtimeMeasurement: AttestationMeasurement): boolean {
+* Compare two measurements according to platform-specific rules
+* This is predicate function for comparing attestation measurements
+* taken from https://github.com/tinfoilsh/verifier/blob/main/attestation/attestation.go
+* 
+* @param codeMeasurement - Expected measurement from code attestation
+* @param runtimeMeasurement - Actual measurement from runtime attestation
+* @returns true if measurements match according to platform rules
+*/
+export function compareMeasurements(
+  codeMeasurement: AttestationMeasurement,
+  runtimeMeasurement: AttestationMeasurement,
+): boolean {
   // Both are multi-platform: compare all registers directly
   if (codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1 && 
       runtimeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
@@ -191,6 +186,7 @@ export function compareMeasurements(codeMeasurement: AttestationMeasurement, run
 
   return JSON.stringify(codeMeasurement.registers) === JSON.stringify(runtimeMeasurement.registers);
 }
+
 
 /**
  * Verifier performs attestation verification for Tinfoil enclaves
@@ -407,29 +403,15 @@ export class Verifier {
     
     return { measurement: parsedCodeMeasurement };
   }
-  
-  /**
-   * Compare measurements using platform-specific logic
-   * @param codeMeasurement - Expected measurement from code attestation
-   * @param runtimeMeasurement - Actual measurement from runtime attestation
-   * @returns true if measurements match according to platform rules
-   */
-  public async compareMeasurements(codeMeasurement: AttestationMeasurement, runtimeMeasurement: AttestationMeasurement): Promise<boolean> {
-    return compareMeasurements(codeMeasurement, runtimeMeasurement);
-  }
 
   /**
-   * Perform attestation verification (backward compatibility)
+   * Perform attestation verification
    * 
    * This method:
    * 1. Fetches the latest code digest from GitHub releases
    * 2. Calls verifyCode to get the expected measurement for the code
    * 3. Calls verifyEnclave to get the actual runtime measurement
-   * 4. Compares measurements using platform-specific logic:
-   *    - Multi-platform to multi-platform: all registers must match
-   *    - Multi-platform to TDX: RTMR1 and RTMR2 must match
-   *    - Multi-platform to SEV: first register (SNP measurement) must match
-   *    - Same platform types: all registers must match
+   * 4. Compares measurements using platform-specific logic (see `compareMeasurements()`)
    * 5. Returns the attestation response if verification succeeds
    * 
    * @throws Error if measurements don't match or verification fails
@@ -442,97 +424,26 @@ export class Verifier {
     }
     
     const verificationPromise = (async () => {
-      await Verifier.initializeWasm();
+      // Get latest release digest using wrapper
+      const digest = await this.fetchLatestDigest(this.repo);
 
-      if (
-        typeof globalThis.verifyCode !== "function" ||
-        typeof globalThis.verifyEnclave !== "function"
-      ) {
-        throw new Error("WASM verification functions not available");
-      }
-
-      // Fetch the latest release digest
-      const fetchFn = getFetch();
-      const releaseResponse = await fetchFn(
-        `https://api-github-proxy.tinfoil.sh/repos/${this.repo}/releases/latest`,
-        {
-          headers: {
-            Accept: "application/vnd.github.v3+json",
-            "User-Agent": "tinfoil-node-client",
-          },
-        },
-      );
-
-      if (!releaseResponse.ok) {
-        throw new Error(
-          `GitHub API request failed: ${releaseResponse.status} ${releaseResponse.statusText}`,
-        );
-      }
-
-      const releaseData = (await releaseResponse.json()) as { body?: string };
-
-      // Extract digest from release notes
-      const eifRegex = /EIF hash: ([a-f0-9]{64})/i;
-      const digestRegex = /Digest: `([a-f0-9]{64})`/;
-
-      let digest;
-      const eifMatch = releaseData.body?.match(eifRegex);
-      const digestMatch = releaseData.body?.match(digestRegex);
-
-      if (eifMatch) {
-        digest = eifMatch[1];
-      } else if (digestMatch) {
-        digest = digestMatch[1];
-      } else {
-        throw new Error("Could not find digest in release notes");
-      }
-
-      // Perform both verifications in parallel
-      const [codeMeasurement, attestationResponse] = await Promise.all([
-        globalThis.verifyCode(this.repo, digest),
-        globalThis.verifyEnclave(this.enclave),
+      // Perform code attestation and runtime attestation in parallel via wrappers
+      const [{ measurement: codeMeasurement }, attestation] = await Promise.all([
+        this.verifyCode(this.repo, digest),
+        this.verifyEnclave(this.enclave),
       ]);
 
-      // Parse measurements to ensure correct format
-      let parsedCodeMeasurement: AttestationMeasurement;
-      let parsedRuntimeMeasurement: AttestationMeasurement;
-
-      // Code measurement may be returned as JSON string or object
-      if (typeof codeMeasurement === 'string') {
-        parsedCodeMeasurement = JSON.parse(codeMeasurement);
-      } else if (codeMeasurement && typeof codeMeasurement === 'object') {
-        parsedCodeMeasurement = {
-          type: codeMeasurement.type || 'unknown',
-          registers: codeMeasurement.registers || []
-        };
-      } else {
-        throw new Error('Invalid code measurement format');
-      }
-
-      // Runtime measurement from attestation response
-      if (attestationResponse.measurement && typeof attestationResponse.measurement === 'string') {
-        parsedRuntimeMeasurement = JSON.parse(attestationResponse.measurement);
-      } else if (attestationResponse.measurement && typeof attestationResponse.measurement === 'object') {
-        parsedRuntimeMeasurement = attestationResponse.measurement;
-      } else {
-        throw new Error('Invalid runtime measurement format');
-      }
-
       // Compare measurements using platform-specific logic
-      const measurementsMatch = compareMeasurements(parsedCodeMeasurement, parsedRuntimeMeasurement);
+      const measurementsMatch = compareMeasurements(codeMeasurement, attestation.measurement);
       
       if (!measurementsMatch) {
         throw new Error(
-          `Measurement verification failed: Code measurement (${parsedCodeMeasurement.type}) ` +
-          `does not match runtime measurement (${parsedRuntimeMeasurement.type})`
+          `Measurement verification failed: Code measurement (${codeMeasurement.type}) ` +
+          `does not match runtime measurement (${attestation.measurement.type})`
         );
       }
 
-      return {
-        tlsPublicKeyFingerprint: attestationResponse.tls_public_key,
-        hpkePublicKey: attestationResponse.hpke_public_key,
-        measurement: parsedRuntimeMeasurement,
-      };
+      return attestation;
     })();
 
     Verifier.verificationCache.set(cacheKey, verificationPromise);
@@ -722,6 +633,7 @@ function loadWasmExec(): Promise<void> {
       // Prefer a dynamic import so bundlers (Next/Webpack/Vite) include the file.
       // If that fails (e.g., pure Node without bundler), fall back to require.
       try {
+        // @ts-expect-error: Local JS helper has no TS types; ambient module declared in wasm-exec.d.ts
         await import("./wasm-exec.js");
       } catch {
         if (nodeRequire) {
