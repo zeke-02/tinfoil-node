@@ -12,6 +12,7 @@ import type {
 } from "openai/resources";
 import { Verifier } from "./verifier";
 import type { AttestationResponse } from "./verifier";
+import type { VerificationDocument } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
 import { createEncryptedBodyFetch } from "./encrypted-body-fetch";
 
@@ -88,6 +89,7 @@ export class TinfoilAI {
   private clientPromise: Promise<OpenAI>;
   private readyPromise?: Promise<void>;
   private configRepo?: string;
+  private verificationDocument?: VerificationDocument;
 
   // Expose properties for compatibility
   public apiKey?: string;
@@ -143,14 +145,17 @@ export class TinfoilAI {
       repo: this.configRepo,
     });
 
-    let attestationResponse: AttestationResponse;
     try {
-      attestationResponse = await verifier.verify();
+      await verifier.verify();
+      this.verificationDocument = verifier.getVerificationDocument();
+      if (!this.verificationDocument) {
+        throw new Error("Verification document not available after successful verification");
+      }
     } catch (error) {
       throw new Error(`Failed to verify enclave: ${error}`);
     }
-    
-    const hpkePublicKey = attestationResponse.hpkePublicKey;
+
+    const hpkePublicKey = this.verificationDocument.enclaveMeasurement.hpkePublicKey;
     const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
       ...options,
       baseURL: this.baseURL,
@@ -176,6 +181,17 @@ export class TinfoilAI {
     await this.ready();
     // We can safely assert this now because ready() must have completed
     return this.client!;
+  }
+
+  /**
+   * Returns the full verification document produced during client initialization.
+   */
+  public async getVerificationDocument(): Promise<VerificationDocument> {
+    await this.ready();
+    if (!this.verificationDocument) {
+      throw new Error("Verification document unavailable: client not verified yet");
+    }
+    return this.verificationDocument;
   }
 
   /**

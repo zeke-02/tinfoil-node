@@ -41,6 +41,20 @@ describe("Secure transport integration", () => {
             verify() {
               return verifyMock();
             }
+            getVerificationDocument() {
+              return {
+                repo: "test-repo",
+                enclaveHost: "test-host",
+                digest: "test-digest",
+                codeMeasurement: { type: "eif", registers: [] },
+                enclaveMeasurement: {
+                  tlsPublicKeyFingerprint: "fingerprint",
+                  hpkePublicKey: "mock-hpke-public-key",
+                  measurement: { type: "eif", registers: [] },
+                },
+                match: true,
+              };
+            }
           },
         },
         "./encrypted-body-fetch": {
@@ -96,6 +110,20 @@ describe("Secure transport integration", () => {
           Verifier: class {
             verify() {
               return verifyMock();
+            }
+            getVerificationDocument() {
+              return {
+                repo: "test-repo",
+                enclaveHost: "test-host",
+                digest: "test-digest",
+                codeMeasurement: { type: "eif", registers: [] },
+                enclaveMeasurement: {
+                  tlsPublicKeyFingerprint: "fingerprint",
+                  hpkePublicKey: "mock-hpke-public-key",
+                  measurement: { type: "eif", registers: [] },
+                },
+                match: true,
+              };
             }
           },
         },

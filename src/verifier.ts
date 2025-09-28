@@ -124,6 +124,18 @@ export interface AttestationResponse {
 }
 
 /**
+ * Full verification document produced by a successful verify() call
+ */
+export interface VerificationDocument {
+  repo: string;
+  enclaveHost: string;
+  digest: string;
+  codeMeasurement: AttestationMeasurement;
+  enclaveMeasurement: AttestationResponse;
+  match: boolean;
+}
+
+/**
 * Compare two measurements according to platform-specific rules
 * This is predicate function for comparing attestation measurements
 * taken from https://github.com/tinfoilsh/verifier/blob/main/attestation/attestation.go
@@ -206,6 +218,9 @@ export class Verifier {
   public static originalFsWriteSync: ((fd: number, buf: Uint8Array) => number) | null = null;
   public static wasmLogsSuppressed = true;
   public static globalsInitialized = false;
+
+  // Stores the full verification document for the last successful verification
+  private lastVerificationDocument?: VerificationDocument;
 
   public static clearVerificationCache(): void {
     Verifier.verificationCache.clear();
@@ -420,7 +435,22 @@ export class Verifier {
     const cacheKey = `${this.repo}::${this.enclave}`;
     const cachedResult = Verifier.verificationCache.get(cacheKey);
     if (cachedResult) {
-      return cachedResult;
+      const attestation = await cachedResult;
+      // Ensure verification document is available even for cached results
+      if (!this.lastVerificationDocument) {
+        // Re-create the document from cached attestation
+        const digest = await this.fetchLatestDigest(this.repo);
+        const { measurement: codeMeasurement } = await this.verifyCode(this.repo, digest);
+        this.lastVerificationDocument = {
+          repo: this.repo,
+          enclaveHost: this.enclave,
+          digest,
+          codeMeasurement,
+          enclaveMeasurement: attestation,
+          match: true, // Must be true since verification succeeded
+        };
+      }
+      return attestation;
     }
     
     const verificationPromise = (async () => {
@@ -442,7 +472,15 @@ export class Verifier {
           `does not match runtime measurement (${attestation.measurement.type})`
         );
       }
-
+      // Persist a full verification document for later retrieval by clients
+      this.lastVerificationDocument = {
+        repo: this.repo,
+        enclaveHost: this.enclave,
+        digest,
+        codeMeasurement,
+        enclaveMeasurement: attestation,
+        match: true,
+      };
       return attestation;
     })();
 
@@ -452,6 +490,13 @@ export class Verifier {
     });
 
     return verificationPromise;
+  }
+
+  /**
+   * Returns the full verification document from the last successful verify() call
+   */
+  public getVerificationDocument(): VerificationDocument | undefined {
+    return this.lastVerificationDocument;
   }
 }
 
