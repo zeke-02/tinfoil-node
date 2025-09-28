@@ -43,14 +43,16 @@ For production applications, always use a backend server to handle API keys.
 ### Browser Usage
 
 ```javascript
-import TinfoilAI from 'tinfoil';
+import { TinfoilAI } from 'tinfoil';
 
 const client = new TinfoilAI({
   apiKey: 'your-api-key',
   dangerouslyAllowBrowser: true // Required for browser usage
 });
 
-const client = await client.ready();
+// Optional: pre-initialize; you can also call APIs directly
+await client.ready();
+
 const completion = await client.chat.completions.create({
   model: 'llama-free',
   messages: [{ role: 'user', content: 'Hello!' }]
@@ -61,6 +63,7 @@ const completion = await client.chat.completions.create({
 
 - Modern browsers with ES2020 support
 - WebAssembly support for enclave verification
+- Secure context (HTTPS or localhost) with WebCrypto SubtleCrypto (required by EHBP)
 
 
 ## Verification helpers
@@ -94,23 +97,24 @@ const digest = await verifier.fetchLatestDigest("tinfoilsh/repo");
 
 - `loadVerifier(wasmUrl?)` boots the verifier with state management and returns an enhanced client.
 - `client.subscribe(callback)` subscribes to real-time verification state updates.
-- `client.runVerification({ repo, enclaveHost, digest?, onUpdate? })` orchestrates the full flow and returns a structured result with step statuses and a comparison outcome.
+- `client.runVerification({ repo?, enclaveHost?, digest?, onUpdate? })` orchestrates the full flow and returns a structured result with step statuses and a comparison outcome. Both `repo` and `enclaveHost` default to values from `TINFOIL_CONFIG`.
 
 ### End-to-end orchestration
 
 ```typescript
-import { loadVerifier } from "tinfoil";
+import { loadVerifier, TINFOIL_CONFIG } from "tinfoil";
 
 const verifier = await loadVerifier();
 
 const result = await verifier.runVerification({
-  repo: "tinfoilsh/confidential-inference-proxy-hpke",
-  enclaveHost: new URL("https://ehbp2.model.tinfoil.sh/v1/").hostname,
   onUpdate: (state) => {
     // Receive stepwise updates: pending -> loading -> success/error
     // Useful for logging or progress indicators
     console.log("verification update:", state);
   },
+  // Optional: override defaults if needed
+  // repo: "tinfoilsh/confidential-inference-proxy",
+  // enclaveHost: https://inference.tinfoil.sh,
 });
 
 if (result.security.status === "success" && result.security.match) {
@@ -124,10 +128,10 @@ if (result.security.status === "success" && result.security.match) {
 
 ```typescript
 type VerificationResult = {
-  code: { status: "pending" | "loading" | "success" | "error"; measurement?: string; error?: string };
+  code: { status: "pending" | "loading" | "success" | "error"; measurement?: AttestationMeasurement; error?: string };
   runtime: {
     status: "pending" | "loading" | "success" | "error";
-    measurement?: string;
+    measurement?: AttestationMeasurement;
     tlsPublicKeyFingerprint?: string;
     hpkePublicKey?: string;
     error?: string;
@@ -140,12 +144,12 @@ type VerificationResult = {
 ### Manual step-by-step use
 
 ```typescript
-import { loadVerifier } from "tinfoil";
+import { loadVerifier, TINFOIL_CONFIG } from "tinfoil";
 
 const verifier = await loadVerifier();
 
 // 1) Runtime attestation
-const runtime = await verifier.verifyEnclave(new URL("https://ehbp2.model.tinfoil.sh/v1/").hostname);
+const runtime = await verifier.verifyEnclave(new URL(TINFOIL_CONFIG.INFERENCE_BASE_URL).hostname);
 console.log("Runtime measurement:", runtime.measurement);
 console.log("TLS fingerprint:", runtime.tlsPublicKeyFingerprint);
 console.log("HPKE key:", runtime.hpkePublicKey);
@@ -184,22 +188,42 @@ const unsubscribe = verifier.subscribe((state) => {
   console.log("state:", state);
 });
 
-await verifier.runVerification({
-  repo: "tinfoilsh/confidential-inference-proxy-hpke",
-  enclaveHost: new URL("https://ehbp2.model.tinfoil.sh/v1/").hostname,
-});
+// Run verification with default config (recommended)
+await verifier.runVerification();
+
+// Or override specific parameters if needed
+// await verifier.runVerification({
+//   repo: "tinfoilsh/confidential-inference-proxy",
+//   enclaveHost: https://inference.tinfoil.sh,
+// });
 
 unsubscribe();
 ```
 
-### Custom WASM URL (optional)
+## Testing
 
-```typescript
-import { loadVerifier } from "tinfoil";
+The project includes both unit tests and integration tests:
 
-// Provide a custom URL if hosting the WASM yourself
-const verifier = await loadVerifier("https://example.com/tinfoil-verifier.wasm");
+### Running Unit Tests
+
+```bash
+npm test
 ```
+
+This runs the test suite with unit tests and mocked components. These tests don't require network access and run quickly.
+
+### Running Integration Tests
+
+```bash
+RUN_TINFOIL_INTEGRATION=true npm test
+```
+
+This runs the full test suite including integration tests that:
+- Make actual network requests to Tinfoil services
+- Perform real enclave attestation verification
+- Test end-to-end functionality with live services
+
+Integration tests are skipped by default to keep the test suite fast and avoid network dependencies during development.
 
 ## Running the Chat Example
 
@@ -217,8 +241,6 @@ npm install
 
 ```bash
 TINFOIL_API_KEY=<YOUR_API_KEY>
-# Optional: Enable verbose verification output
-VERBOSE_VERIFICATION=true
 # Optional: Enable WASM debug logs
 TINFOIL_ENABLE_WASM_LOGS=true
 ```
@@ -231,14 +253,14 @@ npx ts-node main.ts
 ```
 
 The example will:
-- Display a real-time verification progress UI showing each attestation step
+- Display a real-time verification progress showing each attestation step
 - Verify the enclave's runtime and code measurements
 - Compare measurements using platform-specific logic
 - Stream chat completions through the verified secure channel
 
 ## API Documentation
 
-This library is a drop-in replacement for the official OpenAI Node.js client that can be used with Tinfoil. All methods and types are identical. See the [OpenAI client](https://github.com/openai/openai-node) for complete API usage and documentation.
+This library mirrors the official OpenAI Node.js client for common endpoints (e.g., chat, images, embeddings) and types, and is designed to feel familiar. Some less commonly used surfaces may not be fully covered. See the [OpenAI client](https://github.com/openai/openai-node) for complete API usage and documentation.
 
 ## Reporting Vulnerabilities
 
