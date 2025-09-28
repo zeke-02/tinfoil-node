@@ -13,7 +13,7 @@ import type {
 import { Verifier } from "./verifier";
 import type { AttestationResponse } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
-import { createAttestedFetch } from "./attested-fetch";
+import { createEncryptedBodyFetch } from "./encrypted-body-fetch";
 
 /**
  * Detects if the code is running in a real browser environment.
@@ -154,7 +154,7 @@ export class TinfoilAI {
     const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
       ...options,
       baseURL: this.baseURL,
-      fetch: createAttestedFetch(this.baseURL!, hpkePublicKey),
+      fetch: createEncryptedBodyFetch(this.baseURL!, hpkePublicKey),
     };
 
     // Enable dangerouslyAllowBrowser in Node.js with WASM (which makes OpenAI SDK think we're in a browser)

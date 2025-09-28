@@ -5,7 +5,7 @@ import { withMockedModules } from "./test-utils";
 
 describe("Client verification gating", () => {
   it("blocks client creation and requests when verification fails", async (t: TestContext) => {
-    const createAttestedFetch = t.mock.fn((_baseURL: string, _hpkeKey: string) => {
+    const createEncryptedBodyFetch = t.mock.fn((_baseURL: string, _hpkeKey: string) => {
       return (async () => new Response(null)) as typeof fetch;
     });
 
@@ -25,7 +25,7 @@ describe("Client verification gating", () => {
             }
           },
         },
-        "./attested-fetch": { createAttestedFetch },
+        "./encrypted-body-fetch": { createEncryptedBodyFetch },
       },
       ["../client"],
       async () => {
@@ -44,7 +44,7 @@ describe("Client verification gating", () => {
         );
 
         assert.strictEqual(
-          createAttestedFetch.mock.callCount(),
+          createEncryptedBodyFetch.mock.callCount(),
           0,
           "transport should not be created when verification fails",
         );

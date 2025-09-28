@@ -4,9 +4,9 @@ import assert from "node:assert";
 import {
   __setEhbpModuleForTests,
   __resetEhbpModuleStateForTests,
-  createAttestedFetch,
-  attestedRequest,
-} from "../attested-fetch";
+  createEncryptedBodyFetch,
+  encryptedBodyRequest,
+} from "../encrypted-body-fetch";
 
 type EhbpModuleForTest = NonNullable<Parameters<typeof __setEhbpModuleForTests>[0]>;
 
@@ -36,7 +36,7 @@ async function withEhbpModuleMock(module: EhbpModuleForTest, fn: AsyncFn) {
   }
 }
 
-describe("attested fetch helper", () => {
+describe("encrypted body fetch helper", () => {
   it("reuses cached transports for repeated origins", async (t: TestContext) => {
     const transportRequest = t.mock.fn(
       async (_url: string, _init?: RequestInit) => new Response(null),
@@ -51,11 +51,11 @@ describe("attested fetch helper", () => {
     await withEhbpModuleMock(
       createModuleStub(identityGenerate, createTransport),
       async () => {
-        await attestedRequest(
+        await encryptedBodyRequest(
           "https://secure.test/v1/models",
           MOCK_HPKE_PUBLIC_KEY,
         );
-        await attestedRequest("https://secure.test/v1/chat", MOCK_HPKE_PUBLIC_KEY);
+        await encryptedBodyRequest("https://secure.test/v1/chat", MOCK_HPKE_PUBLIC_KEY);
       },
     );
 
@@ -87,7 +87,7 @@ describe("attested fetch helper", () => {
     await withEhbpModuleMock(
       createModuleStub(identityGenerate, createTransport),
       async () => {
-        await attestedRequest(request, MOCK_HPKE_PUBLIC_KEY);
+        await encryptedBodyRequest(request, MOCK_HPKE_PUBLIC_KEY);
       },
     );
 
@@ -118,7 +118,7 @@ describe("attested fetch helper", () => {
     await withEhbpModuleMock(
       createModuleStub(identityGenerate, createTransport),
       async () => {
-        const secureFetch = createAttestedFetch(
+        const secureFetch = createEncryptedBodyFetch(
           "https://secure.test/v1/",
           MOCK_HPKE_PUBLIC_KEY,
         );

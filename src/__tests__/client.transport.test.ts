@@ -5,14 +5,14 @@ import { TINFOIL_CONFIG } from "../config";
 import { withMockedModules } from "./test-utils";
 
 describe("Secure transport integration", () => {
-  it("configures the OpenAI SDK to use the attested transport", async (t: TestContext) => {
+  it("configures the OpenAI SDK to use the encrypted body transport", async (t: TestContext) => {
     const verifyMock = t.mock.fn(async () => ({
       tlsPublicKeyFingerprint: "fingerprint",
       hpkePublicKey: "mock-hpke-public-key",
       measurement: { type: "eif", registers: [] },
     }));
     const mockFetch = t.mock.fn(async () => new Response(null));
-    const createAttestedFetchMock = t.mock.fn(
+    const createEncryptedBodyFetchMock = t.mock.fn(
       (_baseURL: string, _hpkePublicKey: string) => mockFetch,
     );
     const openAIConstructorMock = t.mock.fn(function (this: unknown, options: {
@@ -43,8 +43,8 @@ describe("Secure transport integration", () => {
             }
           },
         },
-        "./attested-fetch": {
-          createAttestedFetch: createAttestedFetchMock,
+        "./encrypted-body-fetch": {
+          createEncryptedBodyFetch: createEncryptedBodyFetchMock,
         },
         openai: Object.assign(openAIConstructorMock, {
           OpenAI: openAIConstructorMock,
@@ -60,7 +60,7 @@ describe("Secure transport integration", () => {
         await client.ready();
 
         assert.strictEqual(verifyMock.mock.callCount(), 1);
-        assert.deepStrictEqual(createAttestedFetchMock.mock.calls[0]?.arguments, [
+        assert.deepStrictEqual(createEncryptedBodyFetchMock.mock.calls[0]?.arguments, [
           TINFOIL_CONFIG.INFERENCE_BASE_URL,
           "mock-hpke-public-key",
         ]);
@@ -76,14 +76,14 @@ describe("Secure transport integration", () => {
     );
   });
 
-  it("provides the attested transport to the AI SDK provider", async (t: TestContext) => {
+  it("provides the encrypted body transport to the AI SDK provider", async (t: TestContext) => {
     const verifyMock = t.mock.fn(async () => ({
       tlsPublicKeyFingerprint: "fingerprint",
       hpkePublicKey: "mock-hpke-public-key",
       measurement: { type: "eif", registers: [] },
     }));
     const mockFetch = t.mock.fn(async () => new Response(null));
-    const createAttestedFetchMock = t.mock.fn(
+    const createEncryptedBodyFetchMock = t.mock.fn(
       (_baseURL: string, _hpkePublicKey: string) => mockFetch,
     );
     const createOpenAICompatibleMock = t.mock.fn(
@@ -99,8 +99,8 @@ describe("Secure transport integration", () => {
             }
           },
         },
-        "./attested-fetch": {
-          createAttestedFetch: createAttestedFetchMock,
+        "./encrypted-body-fetch": {
+          createEncryptedBodyFetch: createEncryptedBodyFetchMock,
         },
         "@ai-sdk/openai-compatible": {
           createOpenAICompatible: createOpenAICompatibleMock,
@@ -112,7 +112,7 @@ describe("Secure transport integration", () => {
         const provider = await createTinfoilAI("api-key");
 
         assert.strictEqual(verifyMock.mock.callCount(), 1);
-        assert.deepStrictEqual(createAttestedFetchMock.mock.calls[0]?.arguments, [
+        assert.deepStrictEqual(createEncryptedBodyFetchMock.mock.calls[0]?.arguments, [
           TINFOIL_CONFIG.INFERENCE_BASE_URL,
           "mock-hpke-public-key",
         ]);
