@@ -16,8 +16,6 @@ export async function runVerificationDemo(): Promise<void> {
   }
 
   const verifier = await loadVerifier();
-  const enclaveHost = new URL(TINFOIL_CONFIG.INFERENCE_BASE_URL).hostname;
-  const repo = TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
   console.log();
   const block = new InlineBlock();
@@ -40,7 +38,7 @@ export async function runVerificationDemo(): Promise<void> {
     block.render(lines);
   });
 
-  const verification = await verifier.runVerification({ repo, enclaveHost });
+  const verification = await verifier.runVerification();
   unsubscribe();
   block.stop();
   console.log();

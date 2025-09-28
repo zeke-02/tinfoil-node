@@ -52,9 +52,13 @@ export interface VerificationResult extends VerificationState {}
  * Options for runVerification method
  */
 export interface RunVerificationOptions {
+  /** GitHub repository to verify. Defaults to TINFOIL_CONFIG.INFERENCE_PROXY_REPO */
   repo?: string;
+  /** Enclave hostname to verify. Defaults to hostname from TINFOIL_CONFIG.INFERENCE_BASE_URL */
   enclaveHost?: string;
+  /** Specific digest to verify. If not provided, fetches latest release digest */
   digest?: string;
+  /** Callback for receiving verification state updates */
   onUpdate?: (state: VerificationState) => void;
 }
 
