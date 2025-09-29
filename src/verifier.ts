@@ -348,39 +348,81 @@ export class Verifier {
    * @returns Attestation response with measurement and keys
    */
   public async verifyEnclave(enclaveHost?: string): Promise<AttestationResponse> {
-    const targetHost = enclaveHost || this.serverURL;
-    
-    await Verifier.initializeWasm();
-    
-    if (typeof globalThis.verifyEnclave !== "function") {
-      throw new Error("WASM verifyEnclave function not available");
-    }
-    
-    const attestationResponse = await globalThis.verifyEnclave(targetHost);
-    
-    // Validate required fields
-    if (!attestationResponse.tls_public_key) {
-      throw new Error('Missing tls_public_key in attestation response');
-    }
-    if (!attestationResponse.hpke_public_key) {
-      throw new Error('Missing hpke_public_key in attestation response');
-    }
-    
-    // Parse runtime measurement
-    let parsedRuntimeMeasurement: AttestationMeasurement;
-    if (attestationResponse.measurement && typeof attestationResponse.measurement === 'string') {
-      parsedRuntimeMeasurement = JSON.parse(attestationResponse.measurement);
-    } else if (attestationResponse.measurement && typeof attestationResponse.measurement === 'object') {
-      parsedRuntimeMeasurement = attestationResponse.measurement;
-    } else {
-      throw new Error('Invalid runtime measurement format');
-    }
-    
-    return {
-      tlsPublicKeyFingerprint: attestationResponse.tls_public_key,
-      hpkePublicKey: attestationResponse.hpke_public_key,
-      measurement: parsedRuntimeMeasurement,
-    };
+    // Expose errors via explicit Promise rejection and add a timeout
+    return new Promise(async (resolve, reject) => {
+      try {
+        const targetHost = enclaveHost || this.serverURL;
+
+        await Verifier.initializeWasm();
+
+        if (typeof globalThis.verifyEnclave !== "function") {
+          reject(new Error("WASM verifyEnclave function not available"));
+          return;
+        }
+
+        let attestationResponse: any;
+        try {
+          const timeoutPromise = new Promise((_, timeoutReject) =>
+            setTimeout(
+              () => timeoutReject(new Error("WASM verifyEnclave timed out after 10 seconds")),
+              10000,
+            ),
+          );
+
+          attestationResponse = await Promise.race([
+            (globalThis as any).verifyEnclave(targetHost),
+            timeoutPromise,
+          ]);
+        } catch (error) {
+          reject(new Error(`WASM verifyEnclave failed: ${error}`));
+          return;
+        }
+
+        // Validate required fields - fail fast with explicit rejection
+        if (!attestationResponse?.tls_public_key) {
+          reject(new Error("Missing tls_public_key in attestation response"));
+          return;
+        }
+        if (!attestationResponse?.hpke_public_key) {
+          reject(
+            new Error(
+              "Missing hpke_public_key in attestation response - EHBP not supported by this enclave",
+            ),
+          );
+          return;
+        }
+
+        // Parse runtime measurement
+        let parsedRuntimeMeasurement: AttestationMeasurement;
+        try {
+          if (
+            attestationResponse.measurement &&
+            typeof attestationResponse.measurement === "string"
+          ) {
+            parsedRuntimeMeasurement = JSON.parse(attestationResponse.measurement);
+          } else if (
+            attestationResponse.measurement &&
+            typeof attestationResponse.measurement === "object"
+          ) {
+            parsedRuntimeMeasurement = attestationResponse.measurement;
+          } else {
+            reject(new Error("Invalid runtime measurement format"));
+            return;
+          }
+        } catch (parseError) {
+          reject(new Error(`Failed to parse runtime measurement: ${parseError}`));
+          return;
+        }
+
+        resolve({
+          tlsPublicKeyFingerprint: attestationResponse.tls_public_key,
+          hpkePublicKey: attestationResponse.hpke_public_key,
+          measurement: parsedRuntimeMeasurement,
+        });
+      } catch (outerError) {
+        reject(outerError as Error);
+      }
+    });
   }
   
   /**
