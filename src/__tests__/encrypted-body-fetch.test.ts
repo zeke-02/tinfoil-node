@@ -134,4 +134,49 @@ describe("encrypted body fetch helper", () => {
     assert.strictEqual(firstCall.arguments[0], "https://secure.test/v1/models");
     assert.strictEqual(secondCall.arguments[0], "https://secure.test/chat");
   });
+
+  it("drops cached transports when the server HPKE key changes", async (t: TestContext) => {
+    const transportRequest = t.mock.fn(
+      async (_url: string, _init?: RequestInit) => new Response(null),
+    );
+    const identityGenerate = t.mock.fn(async () => ({ __mockIdentity: true }));
+
+    let handshakeCount = 0;
+    const createTransport = t.mock.fn(async () => {
+      handshakeCount += 1;
+      if (handshakeCount === 1) {
+        return {
+          request: transportRequest,
+          getServerPublicKeyHex: async () => "stale-server-public-key",
+        };
+      }
+
+      return {
+        request: transportRequest,
+        getServerPublicKeyHex: async () => MOCK_HPKE_PUBLIC_KEY,
+      };
+    });
+
+    await withEhbpModuleMock(
+      createModuleStub(identityGenerate, createTransport),
+      async () => {
+        await assert.rejects(
+          encryptedBodyRequest(
+            "https://secure.test/v1/models",
+            MOCK_HPKE_PUBLIC_KEY,
+          ),
+          /HPKE public key mismatch/,
+        );
+
+        await encryptedBodyRequest(
+          "https://secure.test/v1/models",
+          MOCK_HPKE_PUBLIC_KEY,
+        );
+      },
+    );
+
+    assert.strictEqual(createTransport.mock.callCount(), 2);
+    assert.strictEqual(identityGenerate.mock.callCount(), 2);
+    assert.strictEqual(transportRequest.mock.callCount(), 1);
+  });
 });

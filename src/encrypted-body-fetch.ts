@@ -51,6 +51,7 @@ export async function encryptedBodyRequest(
 
   const serverPublicKey = await transport.getServerPublicKeyHex();
   if (serverPublicKey !== hpkePublicKey) {
+    transportCache.delete(origin);
     throw new Error(`HPKE public key mismatch: expected ${hpkePublicKey}, got ${serverPublicKey}`);
   }
   
