@@ -290,20 +290,12 @@ export class VerifierWithState extends Verifier {
 
 /**
  * Load and initialize a verifier instance with state management
- * @param wasmUrl - Optional custom WASM URL (defaults to https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm)
  * @returns Initialized verifier instance with state management
  */
-export async function loadVerifier(wasmUrl?: string): Promise<VerifierWithState> {
-  // Initialize WASM if custom URL provided
-  if (wasmUrl) {
-    // For now, we can't easily support custom WASM URLs with the static initialization
-    // This would require refactoring the static initialization approach
-    console.warn("Custom WASM URLs are not yet supported. Using default WASM URL.");
-  }
-  
-  // Ensure WASM is initialized
+export async function loadVerifier(): Promise<VerifierWithState> {
+  // Ensure WASM is initialized with the default runtime
   await Verifier.initializeWasm();
-  
+
   // Return a new verifier instance with state management
   return new VerifierWithState();
 }
@@ -317,4 +309,3 @@ export { suppressWasmLogs, TINFOIL_CONFIG };
 export function clearVerificationCache(): void {
   VerifierWithState.clearVerificationCache();
 }
-
