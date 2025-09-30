@@ -4,6 +4,7 @@
 [![NPM version](https://img.shields.io/npm/v/tinfoil.svg)](https://npmjs.org/package/tinfoil)
 
 A Node.js wrapper around the OpenAI client that verifies enclave attestation and routes OpenAI-bound traffic through an [EHBP](https://github.com/tinfoilsh/encrypted-http-body-protocol)-secured transport when using Tinfoil inference.
+EHBP encrypts all payloads directly to an attested enclave using [HPKE (RFC 9180)](https://www.rfc-editor.org/rfc/rfc9180.html).
 
 ## Requirements
 
@@ -95,7 +96,7 @@ const digest = await verifier.fetchLatestDigest("tinfoilsh/repo");
 
 ### High-level Orchestration API
 
-- `loadVerifier(wasmUrl?)` boots the verifier with state management and returns an enhanced client.
+- `loadVerifier()` boots the verifier with state management and returns an enhanced client.
 - `client.subscribe(callback)` subscribes to real-time verification state updates.
 - `client.runVerification({ repo?, enclaveHost?, digest?, onUpdate? })` orchestrates the full flow and returns a structured result with step statuses and a comparison outcome. Both `repo` and `enclaveHost` default to values from `TINFOIL_CONFIG`.
 
