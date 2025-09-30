@@ -297,7 +297,7 @@ export class Verifier {
 
   /**
    * Fetch the latest release digest from GitHub
-   * @param configRepo - Repository name (e.g., "tinfoilsh/confidential-inference-proxy-hpke")
+   * @param configRepo - Repository name (e.g., "tinfoilsh/confidential-inference-proxy")
    * @returns The digest hash
    */
   public async fetchLatestDigest(configRepo?: string): Promise<string> {
