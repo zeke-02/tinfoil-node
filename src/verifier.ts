@@ -329,20 +329,15 @@ export class Verifier {
     const releaseData = (await releaseResponse.json()) as { body?: string };
 
     // Extract digest from release notes
-    const eifRegex = /EIF hash: ([a-f0-9]{64})/i;
     const digestRegex = /Digest: `([a-f0-9]{64})`/;
 
-    let digest;
-    const eifMatch = releaseData.body?.match(eifRegex);
     const digestMatch = releaseData.body?.match(digestRegex);
 
-    if (eifMatch) {
-      digest = eifMatch[1];
-    } else if (digestMatch) {
-      digest = digestMatch[1];
-    } else {
+    if (!digestMatch) {
       throw new Error("Could not find digest in release notes");
     }
+
+    const digest = digestMatch[1];
 
     return digest;
   }

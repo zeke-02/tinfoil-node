@@ -12,7 +12,7 @@ describe("Verifier helpers", () => {
     const fetchMock = t.mock.fn(async (input: RequestInfo) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
-        return new Response(JSON.stringify({ body: `EIF hash: ${makeHex64()}` }), {
+        return new Response(JSON.stringify({ body: `Digest: \`${makeHex64()}\`` }), {
           headers: { "content-type": "application/json" },
         });
       }
@@ -95,7 +95,7 @@ describe("Verifier helpers", () => {
     const fetchMock = t.mock.fn(async (input: RequestInfo) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
-        return new Response(JSON.stringify({ body: `EIF hash: ${makeHex64()}` }), {
+        return new Response(JSON.stringify({ body: `Digest: \`${makeHex64()}\`` }), {
           headers: { "content-type": "application/json" },
         });
       }
