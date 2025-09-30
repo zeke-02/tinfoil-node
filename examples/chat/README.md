@@ -51,7 +51,7 @@ The API key is loaded from `TINFOIL_API_KEY`. The client automatically handles e
 - `warnings.ts`: Optional suppression of the X25519 experimental warning.
 - `ansi.ts`: Tiny color helpers and small utilities used by the UI.
 - `verification-ui.ts`: Minimal inline renderer for verification progress.
-- `verification-demo.ts`: Wires the verifier to the inline UI and logs a summary.
+- `verification-flow.ts`: Wires the verifier to the inline UI and logs a summary.
 - `chat-stream.ts`: Minimal streaming chat demo.
 
 Each file includes comments focusing on its responsibility, so you can read them independently.
