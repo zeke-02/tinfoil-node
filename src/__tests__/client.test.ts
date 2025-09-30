@@ -118,6 +118,62 @@ describe("TinfoilAI", () => {
     );
   });
 
+  it("should perform a responses API invocation", async (t) => {
+    if (!RUN_INTEGRATION) {
+      t.skip(SKIP_MESSAGE);
+      return;
+    }
+
+    const { TinfoilAI } = await import("../client");
+    const client = new TinfoilAI({
+      apiKey: testConfig.apiKey,
+    });
+
+    await client.ready();
+
+    const response = await client.responses.create({
+      model: "llama-free",
+      input: "Reply with the word: Done.",
+    });
+
+    assert.ok(
+      typeof response.output_text === "string" && response.output_text.length > 0,
+      "Responses API should return aggregated output text",
+    );
+  });
+
+  it("should handle streaming responses API invocation", async (t) => {
+    if (!RUN_INTEGRATION) {
+      t.skip(SKIP_MESSAGE);
+      return;
+    }
+
+    const { TinfoilAI } = await import("../client");
+    const client = new TinfoilAI({
+      apiKey: testConfig.apiKey,
+    });
+
+    await client.ready();
+
+    const stream = client.responses.stream({
+      model: "llama-free",
+      input: "Reply with the word: Done.",
+    });
+
+    let aggregated = "";
+
+    for await (const event of stream) {
+      if (event.type === "response.output_text.delta") {
+        aggregated += event.delta;
+      }
+    }
+
+    assert.ok(
+      aggregated.length > 0,
+      "Streaming responses should emit output text deltas",
+    );
+  });
+
   it("should pass client verification with the AI SDK provider", async (t) => {
     if (!RUN_INTEGRATION) {
       t.skip(SKIP_MESSAGE);

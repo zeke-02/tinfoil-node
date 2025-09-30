@@ -1,14 +1,15 @@
 import OpenAI from "openai";
 import type {
+  Audio,
+  Beta,
   Chat,
+  Embeddings,
   Files,
   FineTuning,
   Images,
-  Audio,
-  Embeddings,
   Models,
   Moderations,
-  Beta,
+  Responses,
 } from "openai/resources";
 import { Verifier } from "./verifier";
 import type { AttestationResponse } from "./verifier";
@@ -237,6 +238,16 @@ export class TinfoilAI {
   }
 
   /**
+   * Access to the Responses API, supporting response creation, streaming, and parsing.
+   * Automatically initializes the client if needed.
+   */
+  get responses(): Responses {
+    return createAsyncProxy(
+      this.ensureReady().then((client) => client.responses),
+    );
+  }
+
+  /**
    * Access to OpenAI's embeddings API for creating vector embeddings of text.
    * Automatically initializes the client if needed.
    */
@@ -287,6 +298,7 @@ export namespace TinfoilAI {
   export import Images = OpenAI.Images;
   export import Models = OpenAI.Models;
   export import Moderations = OpenAI.Moderations;
+  export import Responses = OpenAI.Responses;
   export import Uploads = OpenAI.Uploads;
   export import VectorStores = OpenAI.VectorStores;
 }
