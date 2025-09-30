@@ -52,6 +52,11 @@ export async function createTinfoilAI(apiKey: string, options: CreateTinfoilAIOp
     }
     
     // Node.js environment: fall back to TLS-only verification using pinned TLS fetch
+    if (!tlsPublicKeyFingerprint) {
+      throw new Error(
+        "Neither HPKE public key nor TLS public key fingerprint available for verification"
+      );
+    }
     fetchFunction = createPinnedTlsFetch(tlsPublicKeyFingerprint);
   }
 

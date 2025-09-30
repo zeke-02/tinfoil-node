@@ -8,8 +8,8 @@
  * 1) REMOTE ATTESTATION (Enclave Verification)
  *    - Invokes Go WASM `verifyEnclave(host)` against the target enclave hostname
  *    - Verifies vendor certificate chains inside WASM (AMD SEV-SNP / Intel TDX)
- *    - Returns the enclave's runtime measurement and public keys (TLS fingerprint, optionally HPKE)
- *    - Falls back to TLS-only verification if HPKE public key is not available
+ *    - Returns the enclave's runtime measurement and at least one public key (TLS fingerprint and/or HPKE)
+ *    - Falls back to TLS-only verification if only TLS key is available (Node.js only)
  *
  * 2) CODE INTEGRITY (Release Verification)
  *    - Fetches the latest release notes via the Tinfoil GitHub proxy and extracts a digest
@@ -117,10 +117,11 @@ const PLATFORM_TYPES = {
 
 /**
  * Attestation response containing cryptographic keys and measurements
+ * At least one of tlsPublicKeyFingerprint or hpkePublicKey must be present
  */
 export interface AttestationResponse {
-  tlsPublicKeyFingerprint: string;
-  hpkePublicKey?: string; // Optional - falls back to TLS-only verification if not available
+  tlsPublicKeyFingerprint?: string;
+  hpkePublicKey?: string;
   measurement: AttestationMeasurement;
 }
 
@@ -380,11 +381,11 @@ export class Verifier {
         }
 
         // Validate required fields - fail fast with explicit rejection
-        if (!attestationResponse?.tls_public_key) {
-          reject(new Error("Missing tls_public_key in attestation response"));
+        // At least one key must be present (TLS or HPKE)
+        if (!attestationResponse?.tls_public_key && !attestationResponse?.hpke_public_key) {
+          reject(new Error("Missing both tls_public_key and hpke_public_key in attestation response"));
           return;
         }
-        // Note: hpke_public_key is optional - if not present, consumers may fall back to TLS-only verification
 
         // Parse runtime measurement
         let parsedRuntimeMeasurement: AttestationMeasurement;
@@ -409,11 +410,13 @@ export class Verifier {
         }
 
         const result: AttestationResponse = {
-          tlsPublicKeyFingerprint: attestationResponse.tls_public_key,
           measurement: parsedRuntimeMeasurement,
         };
 
-        // Only include HPKE public key if available
+        // Include keys if available
+        if (attestationResponse.tls_public_key) {
+          result.tlsPublicKeyFingerprint = attestationResponse.tls_public_key;
+        }
         if (attestationResponse.hpke_public_key) {
           result.hpkePublicKey = attestationResponse.hpke_public_key;
         }

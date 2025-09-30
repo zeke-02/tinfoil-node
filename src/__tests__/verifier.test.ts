@@ -139,7 +139,7 @@ describe("Verifier helpers", () => {
           const { loadVerifier } = await import("../verification-runner");
           const client = await loadVerifier();
 
-          await assert.rejects(() => client.verifyEnclave("host"), /Missing tls_public_key/);
+          await assert.rejects(() => client.verifyEnclave("host"), /Missing both tls_public_key and hpke_public_key/);
         },
       );
     } finally {
