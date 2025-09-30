@@ -25,7 +25,7 @@
  * - All verification executes locally via WebAssembly (Go → WASM)
  * - WASM loader: `wasm-exec.js`
  * - WASM module URL: https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm
- * - Works in Node 20.18.1+ and modern browsers with lightweight polyfills for
+ * - Works in Node 20+ and modern browsers with lightweight polyfills for
  *   `performance`, `TextEncoder`/`TextDecoder`, and `crypto.getRandomValues`
  * - Go stdout/stderr is suppressed by default; toggle via `suppressWasmLogs()`
  * - Successful end-to-end results are cached per `configRepo::enclave::digest` for the process lifetime
