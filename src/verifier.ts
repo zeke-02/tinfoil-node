@@ -363,19 +363,29 @@ export class Verifier {
         }
 
         let attestationResponse: any;
+        let timeoutHandle: NodeJS.Timeout | number | undefined;
         try {
-          const timeoutPromise = new Promise((_, timeoutReject) =>
-            setTimeout(
+          const timeoutPromise = new Promise((_, timeoutReject) => {
+            timeoutHandle = setTimeout(
               () => timeoutReject(new Error("WASM verifyEnclave timed out after 10 seconds")),
               10000,
-            ),
-          );
+            );
+          });
 
           attestationResponse = await Promise.race([
             (globalThis as any).verifyEnclave(targetHost),
             timeoutPromise,
           ]);
+          
+          // Clear timeout on success
+          if (timeoutHandle !== undefined) {
+            clearTimeout(timeoutHandle);
+          }
         } catch (error) {
+          // Clear timeout on error
+          if (timeoutHandle !== undefined) {
+            clearTimeout(timeoutHandle);
+          }
           reject(new Error(`WASM verifyEnclave failed: ${error}`));
           return;
         }
