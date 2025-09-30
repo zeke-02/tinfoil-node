@@ -3,18 +3,17 @@
 [![Build Status](https://github.com/tinfoilsh/tinfoil-node/actions/workflows/test.yml/badge.svg)](https://github.com/tinfoilsh/tinfoil-node/actions)
 [![NPM version](https://img.shields.io/npm/v/tinfoil.svg)](https://npmjs.org/package/tinfoil)
 
-A Node.js wrapper around the OpenAI client that verifies enclave attestation and routes OpenAI-bound traffic through an [EHBP](https://github.com/tinfoilsh/encrypted-http-body-protocol)-secured transport when using Tinfoil inference.
-EHBP encrypts all payloads directly to an attested enclave using [HPKE (RFC 9180)](https://www.rfc-editor.org/rfc/rfc9180.html).
-
-## Requirements
-
-Node 20.18.1 and higher.
+A Node.js wrapper around the OpenAI client that verifies enclave attestation and routes OpenAI-bound traffic through an [EHBP](https://github.com/tinfoilsh/encrypted-http-body-protocol)-secured transport when using Tinfoil inference. EHBP encrypts all payloads directly to an attested enclave using [HPKE (RFC 9180)](https://www.rfc-editor.org/rfc/rfc9180.html).
 
 ## Installation
 
 ```bash
 npm install tinfoil
 ```
+
+## Requirements
+
+Node 20.18.1 and higher.
 
 ## Quick Start
 
@@ -98,7 +97,7 @@ const digest = await verifier.fetchLatestDigest("tinfoilsh/repo");
 
 - `loadVerifier()` boots the verifier with state management and returns an enhanced client.
 - `client.subscribe(callback)` subscribes to real-time verification state updates.
-- `client.runVerification({ repo?, enclaveHost?, digest?, onUpdate? })` orchestrates the full flow and returns a structured result with step statuses and a comparison outcome. Both `repo` and `enclaveHost` default to values from `TINFOIL_CONFIG`.
+- `client.runVerification({ configRepo?, serverURL?, releaseDigest?, onUpdate? })` orchestrates the full flow and returns a structured result with step statuses and a comparison outcome. Both `configRepo` and `serverURL` default to values from `TINFOIL_CONFIG`.
 
 ### End-to-end orchestration
 
@@ -114,12 +113,13 @@ const result = await verifier.runVerification({
     console.log("verification update:", state);
   },
   // Optional: override defaults if needed
-  // repo: "tinfoilsh/confidential-inference-proxy",
-  // enclaveHost: https://inference.tinfoil.sh,
+  // configRepo: "tinfoilsh/confidential-inference-proxy",
+  // serverURL: "https://inference.tinfoil.sh",
+  // releaseDigest: "<specific-release-sha256>",
 });
 
-if (result.security.status === "success" && result.security.match) {
-  console.log("Measurements match. Digest:", result.digest);
+if (result.verification.status === "success" && result.verification.securityVerified) {
+  console.log("Measurements match. Digest:", result.releaseDigest);
 } else {
   console.error("Verification failed:", result);
 }
@@ -129,57 +129,18 @@ if (result.security.status === "success" && result.security.match) {
 
 ```typescript
 type VerificationResult = {
-  code: { status: "pending" | "loading" | "success" | "error"; measurement?: AttestationMeasurement; error?: string };
+  code: { status: StepStatus; measurement?: AttestationMeasurement; error?: string };
   runtime: {
-    status: "pending" | "loading" | "success" | "error";
+    status: StepStatus;
     measurement?: AttestationMeasurement;
     tlsPublicKeyFingerprint?: string;
     hpkePublicKey?: string;
     error?: string;
   };
-  security: { status: "pending" | "loading" | "success" | "error"; match?: boolean; error?: string };
-  digest: string;
+  verification: { status: StepStatus; securityVerified?: boolean; error?: string };
+  releaseDigest: string;
 };
 ```
-
-### Manual step-by-step use
-
-```typescript
-import { loadVerifier, TINFOIL_CONFIG } from "tinfoil";
-
-const verifier = await loadVerifier();
-
-// 1) Runtime attestation
-const runtime = await verifier.verifyEnclave(new URL(TINFOIL_CONFIG.INFERENCE_BASE_URL).hostname);
-console.log("Runtime measurement:", runtime.measurement);
-console.log("TLS fingerprint:", runtime.tlsPublicKeyFingerprint);
-console.log("HPKE key:", runtime.hpkePublicKey);
-
-// 2) Get latest digest for a repo
-const digest = await verifier.fetchLatestDigest("tinfoilsh/confidential-inference-proxy-hpke");
-
-// 3) Source integrity attestation
-const code = await verifier.verifyCode("tinfoilsh/confidential-inference-proxy-hpke", digest);
-console.log("Code measurement:", code.measurement);
-
-// 4) Platform-aware comparison
-// The verifier automatically handles different platform types (TDX, SEV-SNP, multi-platform)
-// No need to manually compare measurements - use runVerification() for automatic comparison
-```
-
-### Attestation Measurements
-
-The verifier handles multiple TEE platform types with platform-specific measurement comparison logic:
-
-- **Multi-platform format**: Contains measurements for both TDX and SEV-SNP platforms
-- **TDX (Intel Trust Domain Extensions)**: Uses MRTD and RTMR registers
-- **SEV-SNP (AMD Secure Encrypted Virtualization)**: Uses SNP measurement registers
-
-When comparing measurements, the verifier automatically applies the correct platform-specific rules:
-- Multi-platform to multi-platform: All registers must match
-- Multi-platform to TDX: RTMR1 and RTMR2 must match
-- Multi-platform to SEV-SNP: First register (SNP measurement) must match
-- Same platform types: All registers must match
 
 ### Subscribe to state updates
 
@@ -194,8 +155,9 @@ await verifier.runVerification();
 
 // Or override specific parameters if needed
 // await verifier.runVerification({
-//   repo: "tinfoilsh/confidential-inference-proxy",
-//   enclaveHost: https://inference.tinfoil.sh,
+//   configRepo: "tinfoilsh/confidential-inference-proxy",
+//   serverURL: "https://inference.tinfoil.sh",
+//   releaseDigest: "<specific-release-sha256>",
 // });
 
 unsubscribe();
@@ -243,7 +205,7 @@ npm install
 ```bash
 TINFOIL_API_KEY=<YOUR_API_KEY>
 # Optional: Enable WASM debug logs
-TINFOIL_ENABLE_WASM_LOGS=true
+# TINFOIL_ENABLE_WASM_LOGS=true
 ```
 
 4. Run the example:
