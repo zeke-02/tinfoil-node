@@ -3,11 +3,11 @@ import { TINFOIL_CONFIG } from "./config";
 import { createEncryptedBodyFetch } from "./encrypted-body-fetch";
 import { Verifier } from "./verifier";
 import { isRealBrowser } from "./env";
-import https from "node:https";
-import tls, { checkServerIdentity as tlsCheckServerIdentity } from "node:tls";
-import { X509Certificate, createHash } from "node:crypto";
-import { Readable } from "node:stream";
-import { ReadableStream as NodeReadableStream } from "node:stream/web";
+import https from "https";
+import tls, { checkServerIdentity as tlsCheckServerIdentity } from "tls";
+import { X509Certificate, createHash } from "crypto";
+import { Readable } from "stream";
+import { ReadableStream as NodeReadableStream } from "stream/web";
 
 interface CreateTinfoilAIOptions {
   /** Override the inference API base URL */
@@ -138,7 +138,7 @@ function createPinnedTlsFetch(expectedFingerprintHex: string): typeof fetch {
 
     const { signal } = init || {};
 
-    const res = await new Promise<import("node:http").IncomingMessage>((resolve, reject) => {
+    const res = await new Promise<import("http").IncomingMessage>((resolve, reject) => {
       const req = https.request(requestOptions, resolve);
       req.on("error", reject);
       if (signal) {
@@ -172,7 +172,7 @@ function createPinnedTlsFetch(expectedFingerprintHex: string): typeof fetch {
     }
 
     // Convert Node stream to Web ReadableStream
-    const webStream = Readable.toWeb(res as unknown as import("node:stream").Readable) as unknown as ReadableStream;
+    const webStream = Readable.toWeb(res as unknown as import("stream").Readable) as unknown as ReadableStream;
     return new Response(webStream, {
       status: res.statusCode || 0,
       statusText: res.statusMessage || "",
