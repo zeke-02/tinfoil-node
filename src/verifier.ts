@@ -27,7 +27,7 @@
  * - Works in Node 20.18.1+ and modern browsers with lightweight polyfills for
  *   `performance`, `TextEncoder`/`TextDecoder`, and `crypto.getRandomValues`
  * - Go stdout/stderr is suppressed by default; toggle via `suppressWasmLogs()`
- * - Successful end-to-end results are cached per `configRepo::enclave` for the process lifetime
+ * - Successful end-to-end results are cached per `configRepo::enclave::digest` for the process lifetime
  * - Module auto-initializes the WASM runtime on import
  *
  * PROXIES AND TRUST
@@ -423,19 +423,20 @@ export class Verifier {
    * @throws Error if measurements don't match or verification fails
    */
   public async verify(): Promise<AttestationResponse> {
-    const cacheKey = `${this.configRepo}::${this.serverURL}`;
+    // Get latest release digest first to include in cache key
+    const releaseDigest = await this.fetchLatestDigest(this.configRepo);
+    const cacheKey = `${this.configRepo}::${this.serverURL}::${releaseDigest}`;
     const cachedResult = Verifier.verificationCache.get(cacheKey);
     if (cachedResult) {
       const attestation = await cachedResult;
       // Ensure verification document is available even for cached results
       if (!this.lastVerificationDocument) {
         // Re-create the document from cached attestation
-        const digest = await this.fetchLatestDigest(this.configRepo);
-        const { measurement: codeMeasurement } = await this.verifyCode(this.configRepo, digest);
+        const { measurement: codeMeasurement } = await this.verifyCode(this.configRepo, releaseDigest);
         this.lastVerificationDocument = {
           configRepo: this.configRepo,
           enclaveHost: this.serverURL,
-          releaseDigest: digest,
+          releaseDigest: releaseDigest,
           codeMeasurement,
           enclaveMeasurement: attestation,
           match: true, // Must be true since verification succeeded
@@ -445,9 +446,6 @@ export class Verifier {
     }
     
     const verificationPromise = (async () => {
-      // Get latest release digest using wrapper
-      const releaseDigest = await this.fetchLatestDigest(this.configRepo);
-
       // Perform code attestation and runtime attestation in parallel via wrappers
       const [{ measurement: codeMeasurement }, attestation] = await Promise.all([
         this.verifyCode(this.configRepo, releaseDigest),
