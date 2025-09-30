@@ -432,10 +432,8 @@ function createPinnedTlsFetch(expectedFingerprintHex: string): typeof fetch {
     const responseHeaders = new Headers();
     for (const [k, v] of Object.entries(res.headers)) {
       if (Array.isArray(v)) {
-        for (const item of v) responseHeaders.append(k, item);
-      } else if (typeof v === "string") {
-        responseHeaders.set(k, v);
-      } else if (typeof v === "number") {
+        v.forEach(item => responseHeaders.append(k, item));
+      } else if (v != null) {
         responseHeaders.set(k, String(v));
       }
     }
