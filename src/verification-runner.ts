@@ -171,10 +171,15 @@ export class VerifierWithState extends Verifier {
     const cachedPromise = VerifierWithState.runnerVerificationCache.get(cacheKey);
     
     if (cachedPromise) {
-      // Reuse cached promise, but still subscribe to updates if requested
+      // Reuse cached promise, but publish state updates for this instance
       if (options?.onUpdate) {
         const unsubscribe = this.subscribe(options.onUpdate);
-        cachedPromise.finally(() => unsubscribe());
+        
+        // Get the cached result and update this instance's state to match
+        cachedPromise.then(cachedResult => {
+          // Update this instance's state to match the cached result
+          this.updateState(cachedResult);
+        }).finally(() => unsubscribe());
       }
       return cachedPromise;
     }
