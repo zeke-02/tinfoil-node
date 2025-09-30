@@ -8,7 +8,8 @@
  * 1) REMOTE ATTESTATION (Enclave Verification)
  *    - Invokes Go WASM `verifyEnclave(host)` against the target enclave hostname
  *    - Verifies vendor certificate chains inside WASM (AMD SEV-SNP / Intel TDX)
- *    - Returns the enclave's runtime measurement and public keys (TLS fingerprint, HPKE)
+ *    - Returns the enclave's runtime measurement and at least one public key (TLS fingerprint and/or HPKE)
+ *    - Falls back to TLS-only verification if only TLS key is available (Node.js only)
  *
  * 2) CODE INTEGRITY (Release Verification)
  *    - Fetches the latest release notes via the Tinfoil GitHub proxy and extracts a digest
@@ -116,10 +117,11 @@ const PLATFORM_TYPES = {
 
 /**
  * Attestation response containing cryptographic keys and measurements
+ * At least one of tlsPublicKeyFingerprint or hpkePublicKey must be present
  */
 export interface AttestationResponse {
-  tlsPublicKeyFingerprint: string;
-  hpkePublicKey: string;
+  tlsPublicKeyFingerprint?: string;
+  hpkePublicKey?: string;
   measurement: AttestationMeasurement;
 }
 
@@ -348,39 +350,92 @@ export class Verifier {
    * @returns Attestation response with measurement and keys
    */
   public async verifyEnclave(enclaveHost?: string): Promise<AttestationResponse> {
-    const targetHost = enclaveHost || this.serverURL;
-    
-    await Verifier.initializeWasm();
-    
-    if (typeof globalThis.verifyEnclave !== "function") {
-      throw new Error("WASM verifyEnclave function not available");
-    }
-    
-    const attestationResponse = await globalThis.verifyEnclave(targetHost);
-    
-    // Validate required fields
-    if (!attestationResponse.tls_public_key) {
-      throw new Error('Missing tls_public_key in attestation response');
-    }
-    if (!attestationResponse.hpke_public_key) {
-      throw new Error('Missing hpke_public_key in attestation response');
-    }
-    
-    // Parse runtime measurement
-    let parsedRuntimeMeasurement: AttestationMeasurement;
-    if (attestationResponse.measurement && typeof attestationResponse.measurement === 'string') {
-      parsedRuntimeMeasurement = JSON.parse(attestationResponse.measurement);
-    } else if (attestationResponse.measurement && typeof attestationResponse.measurement === 'object') {
-      parsedRuntimeMeasurement = attestationResponse.measurement;
-    } else {
-      throw new Error('Invalid runtime measurement format');
-    }
-    
-    return {
-      tlsPublicKeyFingerprint: attestationResponse.tls_public_key,
-      hpkePublicKey: attestationResponse.hpke_public_key,
-      measurement: parsedRuntimeMeasurement,
-    };
+    // Expose errors via explicit Promise rejection and add a timeout
+    return new Promise(async (resolve, reject) => {
+      try {
+        const targetHost = enclaveHost || this.serverURL;
+
+        await Verifier.initializeWasm();
+
+        if (typeof globalThis.verifyEnclave !== "function") {
+          reject(new Error("WASM verifyEnclave function not available"));
+          return;
+        }
+
+        let attestationResponse: any;
+        let timeoutHandle: NodeJS.Timeout | number | undefined;
+        try {
+          const timeoutPromise = new Promise((_, timeoutReject) => {
+            timeoutHandle = setTimeout(
+              () => timeoutReject(new Error("WASM verifyEnclave timed out after 10 seconds")),
+              10000,
+            );
+          });
+
+          attestationResponse = await Promise.race([
+            (globalThis as any).verifyEnclave(targetHost),
+            timeoutPromise,
+          ]);
+          
+          // Clear timeout on success
+          if (timeoutHandle !== undefined) {
+            clearTimeout(timeoutHandle);
+          }
+        } catch (error) {
+          // Clear timeout on error
+          if (timeoutHandle !== undefined) {
+            clearTimeout(timeoutHandle);
+          }
+          reject(new Error(`WASM verifyEnclave failed: ${error}`));
+          return;
+        }
+
+        // Validate required fields - fail fast with explicit rejection
+        // At least one key must be present (TLS or HPKE)
+        if (!attestationResponse?.tls_public_key && !attestationResponse?.hpke_public_key) {
+          reject(new Error("Missing both tls_public_key and hpke_public_key in attestation response"));
+          return;
+        }
+
+        // Parse runtime measurement
+        let parsedRuntimeMeasurement: AttestationMeasurement;
+        try {
+          if (
+            attestationResponse.measurement &&
+            typeof attestationResponse.measurement === "string"
+          ) {
+            parsedRuntimeMeasurement = JSON.parse(attestationResponse.measurement);
+          } else if (
+            attestationResponse.measurement &&
+            typeof attestationResponse.measurement === "object"
+          ) {
+            parsedRuntimeMeasurement = attestationResponse.measurement;
+          } else {
+            reject(new Error("Invalid runtime measurement format"));
+            return;
+          }
+        } catch (parseError) {
+          reject(new Error(`Failed to parse runtime measurement: ${parseError}`));
+          return;
+        }
+
+        const result: AttestationResponse = {
+          measurement: parsedRuntimeMeasurement,
+        };
+
+        // Include keys if available
+        if (attestationResponse.tls_public_key) {
+          result.tlsPublicKeyFingerprint = attestationResponse.tls_public_key;
+        }
+        if (attestationResponse.hpke_public_key) {
+          result.hpkePublicKey = attestationResponse.hpke_public_key;
+        }
+
+        resolve(result);
+      } catch (outerError) {
+        reject(outerError as Error);
+      }
+    });
   }
   
   /**
