@@ -25,24 +25,24 @@ export async function runVerificationDemo(): Promise<void> {
     digest: "",
     runtime: { status: "pending" },
     code: { status: "pending" },
-    security: { status: "pending" },
+    verification: { status: "pending" },
   };
   const unsubscribe = verifier.subscribe((state) => {
-    const { runtime, code, security, digest } = state;
-    current.digest = digest;
+    const { runtime, code, verification, releaseDigest } = state;
+    current.digest = releaseDigest;
     current.runtime.status = runtime.status;
     current.code.status = code.status;
-    current.security.status = security.status;
+    current.verification.status = verification.status;
 
     const lines = buildLines(current);
     block.render(lines);
   });
 
-  const verification = await verifier.runVerification();
+  const result = await verifier.runVerification();
   unsubscribe();
   block.stop();
   console.log();
-  if (verification.security.status === "success" && verification.security.match) {
+  if (result.verification.status === "success" && result.verification.securityVerified) {
     console.log(fmt.green("Enclave verification completed"));
   } else {
     console.log(fmt.red("Enclave verification failed"));

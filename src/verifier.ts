@@ -13,7 +13,7 @@
  * 2) CODE INTEGRITY (Release Verification)
  *    - Fetches the latest release notes via the Tinfoil GitHub proxy and extracts a digest
  *      (endpoint: https://api-github-proxy.tinfoil.sh)
- *    - Invokes Go WASM `verifyCode(repo, digest)` to obtain the expected code measurement
+ *    - Invokes Go WASM `verifyCode(configRepo, digest)` to obtain the expected code measurement
  *    - The Go implementation verifies provenance using Sigstore/Rekor for GitHub Actions builds
  *
  * 3) CODE CONSISTENCY (Measurement Comparison)
@@ -27,7 +27,7 @@
  * - Works in Node 20.18.1+ and modern browsers with lightweight polyfills for
  *   `performance`, `TextEncoder`/`TextDecoder`, and `crypto.getRandomValues`
  * - Go stdout/stderr is suppressed by default; toggle via `suppressWasmLogs()`
- * - Successful end-to-end results are cached per `repo::enclave` for the process lifetime
+ * - Successful end-to-end results are cached per `configRepo::enclave` for the process lifetime
  * - Module auto-initializes the WASM runtime on import
  *
  * PROXIES AND TRUST
@@ -42,12 +42,12 @@
  * - See `compareMeasurements()` for exact register mapping rules
  *
  * PUBLIC API (this module)
- * - `new Verifier({ serverURL?, repo? })`
+ * - `new Verifier({ serverURL?, configRepo? })`
  * - `verify()` → full end-to-end verification and attestation response
  * - `verifyEnclave(host?)` → runtime attestation only
- * - `verifyCode(repo, digest)` → expected measurement for a specific release
+ * - `verifyCode(configRepo, digest)` → expected measurement for a specific release
  * - `compareMeasurements(code, runtime)` → predicate-based comparison
- * - `fetchLatestDigest(repo?)` → release digest via proxy
+ * - `fetchLatestDigest(configRepo?)` → release digest via proxy
  * - `suppressWasmLogs(suppress?)` → control WASM log output
  */
 import { TINFOIL_CONFIG } from "./config";
@@ -94,7 +94,7 @@ let wasmExecLoader: Promise<void> | null = null;
 // Extend globalThis for Go WASM types
 declare const globalThis: {
   Go: any;
-  verifyCode: (repo: string, digest: string) => Promise<any>;
+  verifyCode: (configRepo: string, digest: string) => Promise<any>;
   verifyEnclave: (host: string) => Promise<any>;
 } & typeof global;
 
@@ -297,17 +297,17 @@ export class Verifier {
 
   /**
    * Fetch the latest release digest from GitHub
-   * @param repo - Repository name (e.g., "tinfoilsh/confidential-inference-proxy-hpke")
+   * @param configRepo - Repository name (e.g., "tinfoilsh/confidential-inference-proxy-hpke")
    * @returns The digest hash
    */
-  public async fetchLatestDigest(repo?: string): Promise<string> {
+  public async fetchLatestDigest(configRepo?: string): Promise<string> {
     // GitHub Proxy Note:
     // We use api-github-proxy.tinfoil.sh instead of the direct GitHub API to avoid
     // rate limiting that could degrade UX. The proxy caches responses while the
     // integrity of the data is independently verified in `verifyCode` via
     // Sigstore transparency logs (Rekor). Using the proxy therefore does not
     // weaken security.
-    const targetRepo = repo || this.configRepo;
+    const targetRepo = configRepo || this.configRepo;
     
     const fetchFn = getFetch();
     const releaseResponse = await fetchFn(
@@ -390,18 +390,18 @@ export class Verifier {
   
   /**
    * Perform code attestation
-   * @param repo - Repository name
+   * @param configRepo - Repository name
    * @param digest - Code digest hash
    * @returns Code measurement
    */
-  public async verifyCode(repo: string, digest: string): Promise<{ measurement: AttestationMeasurement }> {
+  public async verifyCode(configRepo: string, digest: string): Promise<{ measurement: AttestationMeasurement }> {
     await Verifier.initializeWasm();
     
     if (typeof globalThis.verifyCode !== "function") {
       throw new Error("WASM verifyCode function not available");
     }
     
-    const codeMeasurement = await globalThis.verifyCode(repo, digest);
+    const codeMeasurement = await globalThis.verifyCode(configRepo, digest);
     
     // Parse code measurement to ensure correct format
     let parsedCodeMeasurement: AttestationMeasurement;

@@ -25,11 +25,11 @@ export interface RuntimeStepState extends StepState {
 }
 
 /**
- * Security verification state
+ * Final verification summary
  */
-export interface SecurityStepState {
+export interface VerificationSummary {
   status: StepStatus;
-  match?: boolean;
+  securityVerified?: boolean;
   error?: string;
 }
 
@@ -37,10 +37,10 @@ export interface SecurityStepState {
  * Overall verification state
  */
 export interface VerificationState {
-  digest: string;
+  releaseDigest: string;
   runtime: RuntimeStepState;
   code: StepState;
-  security: SecurityStepState;
+  verification: VerificationSummary;
 }
 
 /**
@@ -53,11 +53,11 @@ export interface VerificationResult extends VerificationState {}
  */
 export interface RunVerificationOptions {
   /** GitHub repository to verify. Defaults to TINFOIL_CONFIG.INFERENCE_PROXY_REPO */
-  repo?: string;
+  configRepo?: string;
   /** Enclave hostname to verify. Defaults to hostname from TINFOIL_CONFIG.INFERENCE_BASE_URL */
-  enclaveHost?: string;
-  /** Specific digest to verify. If not provided, fetches latest release digest */
-  digest?: string;
+  serverURL?: string;
+  /** Specific release digest to verify. If not provided, fetches latest release digest */
+  releaseDigest?: string;
   /** Callback for receiving verification state updates */
   onUpdate?: (state: VerificationState) => void;
 }
@@ -68,10 +68,10 @@ export interface RunVerificationOptions {
 export class VerifierWithState extends Verifier {
   // State management
   private state: VerificationState = {
-    digest: "",
+    releaseDigest: "",
     runtime: { status: "pending" },
     code: { status: "pending" },
-    security: { status: "pending" },
+    verification: { status: "pending" },
   };
   
   // Subscribers
@@ -130,26 +130,26 @@ export class VerifierWithState extends Verifier {
    * @returns Final verification result
    */
   public async runVerification(options?: RunVerificationOptions): Promise<VerificationResult> {
-    const repo = options?.repo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
-    const enclaveHost = options?.enclaveHost || new URL(TINFOIL_CONFIG.INFERENCE_BASE_URL).hostname;
-    let digest = options?.digest || "";
+    const configRepo = options?.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
+    const enclaveURL = options?.serverURL || new URL(TINFOIL_CONFIG.INFERENCE_BASE_URL).hostname;
+    let releaseDigest = options?.releaseDigest || "";
     
     // If no digest provided, we need to fetch it first before checking cache
-    if (!digest) {
+    if (!releaseDigest) {
       // Reset state for fresh verification
       this.updateState({
-        digest: "resolving...",
+        releaseDigest: "resolving...",
         runtime: { status: "pending" },
         code: { status: "pending" },
-        security: { status: "pending" },
+        verification: { status: "pending" },
       });
       
       try {
-        digest = await this.fetchLatestDigest(repo);
-        this.updateState({ digest });
+        releaseDigest = await this.fetchLatestDigest(configRepo);
+        this.updateState({ releaseDigest: releaseDigest });
       } catch (error) {
         // If we can't fetch the digest, mark all steps as error
-        this.updateState({ digest: "" });
+        this.updateState({ releaseDigest: "" });
         this.updateStepState("code", {
           status: "error",
           error: error instanceof Error ? error.message : "Failed to fetch digest",
@@ -158,7 +158,7 @@ export class VerifierWithState extends Verifier {
           status: "error",
           error: "Cannot proceed without digest",
         });
-        this.updateStepState("security", {
+        this.updateStepState("verification", {
           status: "error",
           error: "Cannot proceed without digest",
         });
@@ -167,7 +167,7 @@ export class VerifierWithState extends Verifier {
     }
     
     // Now we have a digest, check cache
-    const cacheKey = `${repo}::${enclaveHost}::${digest}`;
+    const cacheKey = `${configRepo}::${enclaveURL}::${releaseDigest}`;
     const cachedPromise = VerifierWithState.runnerVerificationCache.get(cacheKey);
     
     if (cachedPromise) {
@@ -185,7 +185,7 @@ export class VerifierWithState extends Verifier {
     }
     
     // No cached result, create new verification promise
-    const verificationPromise = this._runVerificationInternal(repo, enclaveHost, digest)
+    const verificationPromise = this._runVerificationInternal(configRepo, enclaveURL, releaseDigest)
       .then(result => {
         // Successful verification stays in cache
         return result;
@@ -208,20 +208,20 @@ export class VerifierWithState extends Verifier {
     return verificationPromise;
   }
   
-  private async _runVerificationInternal(repo: string, enclaveHost: string, digest: string): Promise<VerificationResult> {
+  private async _runVerificationInternal(configRepo: string, enclaveURL: string, releaseDigest: string): Promise<VerificationResult> {
     try {
       // Reset state for this verification
       this.updateState({
-        digest,
+        releaseDigest: releaseDigest,
         runtime: { status: "pending" },
         code: { status: "pending" },
-        security: { status: "pending" },
+        verification: { status: "pending" },
       });
       
       // Step 2: Runtime attestation
       this.updateStepState("runtime", { status: "loading" });
       try {
-        const runtimeResult = await this.verifyEnclave(enclaveHost);
+        const runtimeResult = await this.verifyEnclave(enclaveURL);
         this.updateStepState("runtime", {
           status: "success",
           measurement: runtimeResult.measurement,
@@ -233,7 +233,7 @@ export class VerifierWithState extends Verifier {
           status: "error",
           error: error instanceof Error ? error.message : "Runtime attestation failed",
         });
-        this.updateStepState("security", {
+        this.updateStepState("verification", {
           status: "error",
           error: "Cannot verify security without runtime attestation",
         });
@@ -243,7 +243,7 @@ export class VerifierWithState extends Verifier {
       // Step 3: Code attestation
       this.updateStepState("code", { status: "loading" });
       try {
-        const codeResult = await this.verifyCode(repo, digest);
+        const codeResult = await this.verifyCode(configRepo, releaseDigest);
         this.updateStepState("code", {
           status: "success",
           measurement: codeResult.measurement,
@@ -253,32 +253,32 @@ export class VerifierWithState extends Verifier {
           status: "error",
           error: error instanceof Error ? error.message : "Code attestation failed",
         });
-        this.updateStepState("security", {
+        this.updateStepState("verification", {
           status: "error",
           error: "Cannot verify security without code attestation",
         });
         return this.state;
       }
-      
+
       // Step 4: Compare measurements
-      this.updateStepState("security", { status: "loading" });
+      this.updateStepState("verification", { status: "loading" });
       const codeMeasurement = this.state.code.measurement!;
       const runtimeMeasurement = this.state.runtime.measurement!;
-      
+
       // Use the compareMeasurements function
       const measurementsMatch = compareMeasurements(codeMeasurement, runtimeMeasurement);
-      
-      this.updateStepState("security", {
+
+      this.updateStepState("verification", {
         status: "success",
-        match: measurementsMatch,
+        securityVerified: measurementsMatch,
       });
       
       return this.state;
       
     } catch (error) {
       // Catch any unexpected errors
-      if (this.state.security.status === "pending" || this.state.security.status === "loading") {
-        this.updateStepState("security", {
+      if (this.state.verification.status === "pending" || this.state.verification.status === "loading") {
+        this.updateStepState("verification", {
           status: "error",
           error: error instanceof Error ? error.message : "Verification failed",
         });

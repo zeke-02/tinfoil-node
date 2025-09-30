@@ -43,7 +43,7 @@ describe("Secure transport integration", () => {
             }
             getVerificationDocument() {
               return {
-                repo: "test-repo",
+                configRepo: "test-repo",
                 enclaveHost: "test-host",
                 digest: "test-digest",
                 codeMeasurement: { type: "eif", registers: [] },
@@ -113,7 +113,7 @@ describe("Secure transport integration", () => {
             }
             getVerificationDocument() {
               return {
-                repo: "test-repo",
+                configRepo: "test-repo",
                 enclaveHost: "test-host",
                 digest: "test-digest",
                 codeMeasurement: { type: "eif", registers: [] },

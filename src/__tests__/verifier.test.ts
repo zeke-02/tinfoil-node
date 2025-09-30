@@ -63,21 +63,21 @@ describe("Verifier helpers", () => {
           const unsubscribe = client.subscribe((s: any) => updates.push(s));
 
           const result = await client.runVerification({
-            repo: "owner/repo",
-            enclaveHost: "host",
+            configRepo: "owner/repo",
+            serverURL: "host",
             onUpdate: (s: any) => updates.push(s),
           });
 
           unsubscribe();
 
           assert.strictEqual(fetchMock.mock.callCount() > 0, true);
-          assert.strictEqual(result.security.status, "success");
-          assert.strictEqual(result.security.match, true);
+          assert.strictEqual(result.verification.status, "success");
+          assert.strictEqual(result.verification.securityVerified, true);
           assert.strictEqual(result.runtime.status, "success");
           assert.deepStrictEqual(result.runtime.measurement, { type: "eif", registers: ["r1", "r2"] });
           assert.strictEqual(result.runtime.tlsPublicKeyFingerprint, "tls-fp");
           assert.strictEqual(result.runtime.hpkePublicKey, "hpke-key");
-          assert.strictEqual(typeof result.digest, "string");
+          assert.strictEqual(typeof result.releaseDigest, "string");
 
           // We should have emitted multiple state transitions
           assert.ok(updates.length >= 5, "should emit multiple updates");
@@ -195,11 +195,14 @@ describe("Verifier helpers", () => {
 
           const { loadVerifier } = await import("../verification-runner");
           const client = await loadVerifier();
-          const result = await client.runVerification({ repo: "o/r", enclaveHost: "h" });
+          const result = await client.runVerification({
+            configRepo: "o/r",
+            serverURL: "h",
+          });
 
           assert.strictEqual(result.code.status, "error");
-          assert.strictEqual(result.security.status, "error");
-          assert.strictEqual(result.digest, "");
+          assert.strictEqual(result.verification.status, "error");
+          assert.strictEqual(result.releaseDigest, "");
         },
       );
     } finally {
@@ -209,5 +212,3 @@ describe("Verifier helpers", () => {
     }
   });
 });
-
-

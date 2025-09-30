@@ -7,7 +7,7 @@ declare global {
     tls_public_key: string;
     hpke_public_key: string;
   }>;
-  let verifyCode: (repo: string, digest: string) => Promise<AttestationMeasurement>;
+  let verifyCode: (configRepo: string, digest: string) => Promise<AttestationMeasurement>;
 }
 
 export {};

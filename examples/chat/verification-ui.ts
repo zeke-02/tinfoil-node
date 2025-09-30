@@ -16,7 +16,7 @@ export type RenderableState = {
   digest: string;
   runtime: { status: StepStatus };
   code: { status: StepStatus };
-  security: { status: StepStatus };
+  verification: { status: StepStatus };
 };
 
 // Convert state into a set of human-readable lines for printing
@@ -34,8 +34,8 @@ export function buildLines(state: RenderableState): string[] {
   // Code
   lines.push(`${fmt.dim("├")} ${fmt.bold("Code")}    ${statusIcon(state.code.status)}`);
   
-  // Security
-  lines.push(`${fmt.dim("└")} ${fmt.bold("Security")} ${statusIcon(state.security.status)}`);
+  // Final verification summary
+  lines.push(`${fmt.dim("└")} ${fmt.bold("Verification")} ${statusIcon(state.verification.status)}`);
   
   return lines;
 }
@@ -70,5 +70,4 @@ export class InlineBlock {
     this.first = false;
   }
 }
-
 
