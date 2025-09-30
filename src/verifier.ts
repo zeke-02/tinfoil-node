@@ -398,18 +398,14 @@ export class Verifier {
     
     const codeMeasurement = await globalThis.verifyCode(configRepo, digest);
     
-    // Parse code measurement to ensure correct format
-    let parsedCodeMeasurement: AttestationMeasurement;
-    if (typeof codeMeasurement === 'string') {
-      parsedCodeMeasurement = JSON.parse(codeMeasurement);
-    } else if (codeMeasurement && typeof codeMeasurement === 'object') {
-      parsedCodeMeasurement = {
-        type: codeMeasurement.type || 'unknown',
-        registers: codeMeasurement.registers || []
-      };
-    } else {
+    if (!codeMeasurement || typeof codeMeasurement !== 'object') {
       throw new Error('Invalid code measurement format');
     }
+    
+    const parsedCodeMeasurement: AttestationMeasurement = {
+      type: codeMeasurement.type || 'unknown',
+      registers: codeMeasurement.registers || []
+    };
     
     return { measurement: parsedCodeMeasurement };
   }
