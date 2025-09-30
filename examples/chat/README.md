@@ -1,6 +1,9 @@
 # Tinfoil Chat Example
 
-This example demonstrates how to use the Tinfoil client to interact with OpenAI's chat completion API in both streaming and non-streaming modes.
+This example demonstrates how to use the Tinfoil client with a clear, small-module layout. It shows:
+
+- Enclave/code verification with a simple progress UI
+- A streaming chat completion
 
 ## Setup
 
@@ -9,7 +12,7 @@ This example demonstrates how to use the Tinfoil client to interact with OpenAI'
    ```bash
    cd examples/chat
    ```
-3. Install the required dependencies:
+3. Install the required dependencies (local dev helpers for the example only):
    ```bash
    npm install dotenv openai ts-node typescript
    ```
@@ -34,8 +37,21 @@ npx ts-node main.ts
 
 The example will:
 
-1. Create a TinfoilAI client with default parameters
+1. Load environment variables quietly from `.env` (if present)
+2. Suppress a noisy Node experimental warning by default
+3. Run enclave/code verification with an inline progress block
+4. Create a `TinfoilAI` client and run a streaming chat completion
 
-2. Demonstrate a streaming chat completion with real-time output
+The API key is loaded from `TINFOIL_API_KEY`. The client automatically handles enclave verification and secure communication.
 
-The code shows both the basic usage pattern and error handling. The API key is loaded from the `TINFOIL_API_KEY` environment variable, and the client automatically handles enclave verification and secure communication.
+## File Structure
+
+- `main.ts`: Orchestrates the example. Loads env, installs warning filter, then runs verification and chat streaming.
+- `env.ts`: Quiet `.env` loader.
+- `warnings.ts`: Optional suppression of the X25519 experimental warning.
+- `ansi.ts`: Tiny color helpers and small utilities used by the UI.
+- `verification-ui.ts`: Minimal inline renderer for verification progress.
+- `verification-flow.ts`: Wires the verifier to the inline UI and logs a summary.
+- `chat-stream.ts`: Minimal streaming chat demo.
+
+Each file includes comments focusing on its responsibility, so you can read them independently.

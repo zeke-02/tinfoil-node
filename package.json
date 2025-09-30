@@ -3,10 +3,24 @@
   "version": "0.8.0",
   "description": "Tinfoil secure OpenAI client wrapper",
   "main": "dist/index.js",
+  "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
+  "browser": {
+    "./dist/index.js": "./dist/esm/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/esm/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "build": "tsc && cp src/wasm-exec.js dist/",
-    "test": "jest --config jest.config.cjs",
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "tsc && cp src/wasm-exec.js dist/",
+    "build:esm": "tsc -p tsconfig.esm.json && cp src/wasm-exec.js dist/esm/",
+    "test": "bash -lc 'rm -rf .node-tests && tsc -p tsconfig.node-test.json && cp src/wasm-exec.js .node-tests/ && node --test $(find .node-tests -name \"*.test.js\" -print)'",
     "lint": "eslint src/**/*.ts",
     "prepublishOnly": "npm run build"
   },
@@ -34,18 +48,16 @@
     "@ai-sdk/openai-compatible": "^1.0.10",
     "ai": "^5.0.19",
     "dotenv": "^17.2.1",
+    "ehbp": "^0.0.2",
     "openai": "^5.13.1",
-    "ts-node": "^10.9.2",
-    "undici": "^7.14.0"
+    "ts-node": "^10.9.2"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.12",
     "@types/node": "^24.3.0",
     "@typescript-eslint/eslint-plugin": "^8.40.0",
     "@typescript-eslint/parser": "^8.40.0",
     "eslint": "^8.57.0",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.4.1",
+    "jsdom": "^25.0.0",
     "typescript": "^5.9.2"
   }
 }

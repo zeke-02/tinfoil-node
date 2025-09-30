@@ -1,9 +1,7 @@
+import { describe, it } from "node:test";
+import assert from "node:assert";
 import { streamText } from "ai";
-import { TinfoilAI } from "../client";
-import { createTinfoilAI } from "../ai-sdk-provider";
-import "@jest/globals";
 
-// Test configuration
 interface TestConfig {
   apiKey: string;
 }
@@ -12,30 +10,51 @@ const testConfig: TestConfig = {
   apiKey: "tinfoil",
 };
 
+const RUN_INTEGRATION = process.env.RUN_TINFOIL_INTEGRATION === "true";
+const SKIP_MESSAGE =
+  "Set RUN_TINFOIL_INTEGRATION=true to enable network integration tests.";
+
 describe("TinfoilAI", () => {
-  it("should create a client with direct parameters", async () => {
+  it("should create a client with direct parameters", async (t) => {
+    if (!RUN_INTEGRATION) {
+      t.skip(SKIP_MESSAGE);
+      return;
+    }
+
+    const { TinfoilAI } = await import("../client");
     const client = new TinfoilAI({
       apiKey: testConfig.apiKey,
     });
-    await client.ready();
-    expect(client).toBeDefined();
-  }, 60000);
 
-  it("should create a client with environment variables fallback", async () => {
-    // Set environment variables
+    await client.ready();
+    assert.ok(client, "Client instance should be created");
+  });
+
+  it("should create a client with environment variables fallback", async (t) => {
+    if (!RUN_INTEGRATION) {
+      t.skip(SKIP_MESSAGE);
+      return;
+    }
+
     process.env.TINFOIL_API_KEY = testConfig.apiKey;
 
     try {
+      const { TinfoilAI } = await import("../client");
       const client = new TinfoilAI();
       await client.ready();
-      expect(client).toBeDefined();
+      assert.ok(client, "Client instance should be created with env fallback");
     } finally {
-      // Clean up
       delete process.env.TINFOIL_API_KEY;
     }
-  }, 60000);
+  });
 
-  it("should perform non-streaming chat completion", async () => {
+  it("should perform non-streaming chat completion", async (t) => {
+    if (!RUN_INTEGRATION) {
+      t.skip(SKIP_MESSAGE);
+      return;
+    }
+
+    const { TinfoilAI } = await import("../client");
     const client = new TinfoilAI({
       apiKey: testConfig.apiKey,
     });
@@ -53,11 +72,19 @@ describe("TinfoilAI", () => {
       model: "llama-free",
     });
 
-    console.log("Response received:", response.choices[0].message.content);
-    expect(response.choices[0].message.content).toBeDefined();
-  }, 60000);
+    assert.ok(
+      response.choices[0]?.message?.content,
+      "Chat completion should return content",
+    );
+  });
 
-  it("should handle streaming chat completion", async () => {
+  it("should handle streaming chat completion", async (t) => {
+    if (!RUN_INTEGRATION) {
+      t.skip(SKIP_MESSAGE);
+      return;
+    }
+
+    const { TinfoilAI } = await import("../client");
     const client = new TinfoilAI({
       apiKey: testConfig.apiKey,
     });
@@ -77,21 +104,83 @@ describe("TinfoilAI", () => {
     });
 
     let accumulatedContent = "";
-    console.log("Chat completion streaming response:");
 
     for await (const chunk of stream) {
-      if (chunk.choices[0]?.delta?.content) {
-        const content = chunk.choices[0].delta.content;
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) {
         accumulatedContent += content;
-        console.log("Received:", content);
       }
     }
 
-    console.log("Complete response:", accumulatedContent);
-    expect(accumulatedContent.length).toBeGreaterThan(0);
-  }, 60000);
+    assert.ok(
+      accumulatedContent.length > 0,
+      "Streaming completion should produce content",
+    );
+  });
 
-  it("should pass client verification with the AI SDK provider", async () => {
+  it("should perform a responses API invocation", async (t) => {
+    if (!RUN_INTEGRATION) {
+      t.skip(SKIP_MESSAGE);
+      return;
+    }
+
+    const { TinfoilAI } = await import("../client");
+    const client = new TinfoilAI({
+      apiKey: testConfig.apiKey,
+    });
+
+    await client.ready();
+
+    const response = await client.responses.create({
+      model: "llama-free",
+      input: "Reply with the word: Done.",
+    });
+
+    assert.ok(
+      typeof response.output_text === "string" && response.output_text.length > 0,
+      "Responses API should return aggregated output text",
+    );
+  });
+
+  it("should handle streaming responses API invocation", async (t) => {
+    if (!RUN_INTEGRATION) {
+      t.skip(SKIP_MESSAGE);
+      return;
+    }
+
+    const { TinfoilAI } = await import("../client");
+    const client = new TinfoilAI({
+      apiKey: testConfig.apiKey,
+    });
+
+    await client.ready();
+
+    const stream = client.responses.stream({
+      model: "llama-free",
+      input: "Reply with the word: Done.",
+    });
+
+    let aggregated = "";
+
+    for await (const event of stream) {
+      if (event.type === "response.output_text.delta") {
+        aggregated += event.delta;
+      }
+    }
+
+    assert.ok(
+      aggregated.length > 0,
+      "Streaming responses should emit output text deltas",
+    );
+  });
+
+  it("should pass client verification with the AI SDK provider", async (t) => {
+    if (!RUN_INTEGRATION) {
+      t.skip(SKIP_MESSAGE);
+      return;
+    }
+
+    const { createTinfoilAI } = await import("../ai-sdk-provider");
     const tinfoilai = await createTinfoilAI(testConfig.apiKey);
 
     const { textStream } = streamText({
@@ -99,9 +188,11 @@ describe("TinfoilAI", () => {
       prompt: "say hi to me",
     });
 
+    let seenText = "";
     for await (const textPart of textStream) {
-      process.stdout.write(textPart);
+      seenText += textPart;
     }
-    console.log();
+
+    assert.ok(seenText.length > 0, "Streamed text should be received");
   });
 });

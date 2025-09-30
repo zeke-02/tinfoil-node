@@ -1,46 +1,27 @@
 import OpenAI from "openai";
 import type {
+  Audio,
+  Beta,
   Chat,
+  Embeddings,
   Files,
   FineTuning,
   Images,
-  Audio,
-  Embeddings,
   Models,
   Moderations,
-  Beta,
+  Responses,
 } from "openai/resources";
-import { createHash, X509Certificate } from "crypto";
-import { SecureClient, GroundTruth } from "./secure-client";
-import https from "https";
-import { PeerCertificate } from "tls";
+import { Verifier } from "./verifier";
+import type { AttestationResponse } from "./verifier";
+import type { VerificationDocument } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
+import { createEncryptedBodyFetch } from "./encrypted-body-fetch";
 
 /**
  * Detects if the code is running in a real browser environment.
  * Returns false for Node.js environments, even with WASM loaded.
  */
-function isRealBrowser(): boolean {
-  // Check for Node.js-specific globals that wouldn't exist in a real browser
-  if (
-    typeof process !== "undefined" &&
-    process.versions &&
-    process.versions.node
-  ) {
-    return false; // Definitely Node.js
-  }
-
-  // Check for browser-specific window object AND ensure it's not a Node.js global mock
-  if (typeof window !== "undefined" && typeof window.document !== "undefined") {
-    // Additional check: real browsers have navigator.userAgent
-    if (typeof navigator !== "undefined" && navigator.userAgent) {
-      return true; // Likely a real browser
-    }
-  }
-
-  // Default to safe: assume it's not a browser (Node.js with WASM)
-  return false;
-}
+import { isRealBrowser } from "./env";
 
 /**
  * Creates a proxy that allows property access and method calls on a Promise before it resolves.
@@ -87,24 +68,29 @@ function createAsyncProxy<T extends object>(promise: Promise<T>): T {
 
 /**
  * TinfoilAI is a wrapper around the OpenAI API client that adds additional
- * security measures through enclave verification and certificate fingerprint validation.
+ * security measures through enclave verification and an EHBP-secured transport.
  *
  * It provides:
  * - Automatic verification of Tinfoil secure enclaves
- * - Certificate fingerprint validation for each request
+ * - EHBP-enforced transport security for each request
  * - Type-safe access to OpenAI's chat completion APIs
  */
 
 interface TinfoilAIOptions {
   apiKey?: string;
+  /** Override the inference API base URL */
+  baseURL?: string;
+  /** Override the config GitHub repository */
+  configRepo?: string;
   [key: string]: any; // Allow other OpenAI client options
 }
 
 export class TinfoilAI {
   private client?: OpenAI;
-  private groundTruth?: GroundTruth;
   private clientPromise: Promise<OpenAI>;
   private readyPromise?: Promise<void>;
+  private configRepo?: string;
+  private verificationDocument?: VerificationDocument;
 
   // Expose properties for compatibility
   public apiKey?: string;
@@ -123,7 +109,9 @@ export class TinfoilAI {
 
     // Store properties for compatibility
     this.apiKey = openAIOptions.apiKey;
-    this.baseURL = TINFOIL_CONFIG.INFERENCE_BASE_URL;
+    this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
+    this.configRepo =
+      options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
     this.clientPromise = this.initClient(openAIOptions);
   }
@@ -152,59 +140,32 @@ export class TinfoilAI {
       Omit<ConstructorParameters<typeof OpenAI>[0], "baseURL">
     > = {},
   ): Promise<OpenAI> {
-    // Verify the enclave and get the certificate fingerprint
-    const secureClient = new SecureClient();
+    // Verify the enclave before establishing a transport
+    const verifier = new Verifier({
+      serverURL: this.baseURL,
+      configRepo: this.configRepo,
+    });
 
     try {
-      this.groundTruth = await secureClient.verify();
+      await verifier.verify();
+      this.verificationDocument = verifier.getVerificationDocument();
+      if (!this.verificationDocument) {
+        throw new Error("Verification document not available after successful verification");
+      }
     } catch (error) {
       throw new Error(`Failed to verify enclave: ${error}`);
     }
 
-    const expectedFingerprint = this.groundTruth.publicKeyFP;
-
-    // Create a custom HTTPS agent that verifies certificate fingerprints
-    const httpsAgent = new https.Agent({
-      rejectUnauthorized: true,
-      checkServerIdentity: (host: string, cert: PeerCertificate) => {
-        if (!cert || !cert.raw) {
-          throw new Error("No certificate found");
-        }
-        if (!cert.pubkey) {
-          throw new Error("No public key found");
-        }
-
-        const pemCert = `-----BEGIN CERTIFICATE-----\n${cert.raw.toString("base64")}\n-----END CERTIFICATE-----`;
-        const x509Cert = new X509Certificate(pemCert);
-        const publicKey = x509Cert.publicKey.export({
-          format: "der",
-          type: "spki",
-        });
-        const publicKeyHash = createHash("sha256")
-          .update(publicKey)
-          .digest("hex");
-
-        if (publicKeyHash !== expectedFingerprint) {
-          throw new Error(
-            `Certificate fingerprint mismatch. Got ${publicKeyHash}, expected ${expectedFingerprint}`,
-          );
-        }
-
-        return undefined; // Validation successful
-      },
-    });
-
-    // Create the OpenAI client with our custom configuration
-    // Note: baseURL will need to be determined by the verification process
+    const hpkePublicKey = this.verificationDocument.enclaveMeasurement.hpkePublicKey;
     const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
       ...options,
-      baseURL: TINFOIL_CONFIG.INFERENCE_BASE_URL,
+      baseURL: this.baseURL,
+      fetch: createEncryptedBodyFetch(this.baseURL!, hpkePublicKey),
     };
 
-    // Only enable dangerouslyAllowBrowser when we're NOT in a real browser
-    // This prevents API key exposure if code is ever bundled for browser use
-    if (!isRealBrowser()) {
-      // We're in Node.js with WASM, which makes OpenAI SDK think we're in a browser
+    // Enable dangerouslyAllowBrowser in Node.js with WASM (which makes OpenAI SDK think we're in a browser)
+    // OR if explicitly set by the user (for legitimate browser usage like playgrounds)
+    if (!isRealBrowser() || (options as any).dangerouslyAllowBrowser === true) {
       clientOptions.dangerouslyAllowBrowser = true;
     }
 
@@ -221,6 +182,17 @@ export class TinfoilAI {
     await this.ready();
     // We can safely assert this now because ready() must have completed
     return this.client!;
+  }
+
+  /**
+   * Returns the full verification document produced during client initialization.
+   */
+  public async getVerificationDocument(): Promise<VerificationDocument> {
+    await this.ready();
+    if (!this.verificationDocument) {
+      throw new Error("Verification document unavailable: client not verified yet");
+    }
+    return this.verificationDocument;
   }
 
   /**
@@ -263,6 +235,16 @@ export class TinfoilAI {
    */
   get audio(): Audio {
     return createAsyncProxy(this.ensureReady().then((client) => client.audio));
+  }
+
+  /**
+   * Access to the Responses API, supporting response creation, streaming, and parsing.
+   * Automatically initializes the client if needed.
+   */
+  get responses(): Responses {
+    return createAsyncProxy(
+      this.ensureReady().then((client) => client.responses),
+    );
   }
 
   /**
@@ -316,6 +298,7 @@ export namespace TinfoilAI {
   export import Images = OpenAI.Images;
   export import Models = OpenAI.Models;
   export import Moderations = OpenAI.Moderations;
+  export import Responses = OpenAI.Responses;
   export import Uploads = OpenAI.Uploads;
   export import VectorStores = OpenAI.VectorStores;
 }
