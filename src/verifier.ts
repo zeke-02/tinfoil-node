@@ -42,7 +42,7 @@
  * - See `compareMeasurements()` for exact register mapping rules
  *
  * PUBLIC API (this module)
- * - `new Verifier({ baseURL?, repo? })`
+ * - `new Verifier({ serverURL?, repo? })`
  * - `verify()` → full end-to-end verification and attestation response
  * - `verifyEnclave(host?)` → runtime attestation only
  * - `verifyCode(repo, digest)` → expected measurement for a specific release
@@ -127,9 +127,9 @@ export interface AttestationResponse {
  * Full verification document produced by a successful verify() call
  */
 export interface VerificationDocument {
-  repo: string;
+  configRepo: string;
   enclaveHost: string;
-  digest: string;
+  releaseDigest: string;
   codeMeasurement: AttestationMeasurement;
   enclaveMeasurement: AttestationResponse;
   match: boolean;
@@ -227,13 +227,13 @@ export class Verifier {
   }
 
   // Configuration for the target enclave and repository
-  protected readonly enclave: string;
-  protected readonly repo: string;
+  protected readonly serverURL: string;
+  protected readonly configRepo: string;
 
-  constructor(options?: { baseURL?: string; repo?: string }) {
-    const baseURL = options?.baseURL ?? TINFOIL_CONFIG.INFERENCE_BASE_URL;
-    this.enclave = new URL(baseURL).hostname;
-    this.repo = options?.repo ?? TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
+  constructor(options?: { serverURL?: string; configRepo?: string }) {
+    const serverURL = options?.serverURL ?? TINFOIL_CONFIG.INFERENCE_BASE_URL;
+    this.serverURL = new URL(serverURL).hostname;
+    this.configRepo = options?.configRepo ?? TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
   }
 
   /**
@@ -307,7 +307,7 @@ export class Verifier {
     // integrity of the data is independently verified in `verifyCode` via
     // Sigstore transparency logs (Rekor). Using the proxy therefore does not
     // weaken security.
-    const targetRepo = repo || this.repo;
+    const targetRepo = repo || this.configRepo;
     
     const fetchFn = getFetch();
     const releaseResponse = await fetchFn(
@@ -353,7 +353,7 @@ export class Verifier {
    * @returns Attestation response with measurement and keys
    */
   public async verifyEnclave(enclaveHost?: string): Promise<AttestationResponse> {
-    const targetHost = enclaveHost || this.enclave;
+    const targetHost = enclaveHost || this.serverURL;
     
     await Verifier.initializeWasm();
     
@@ -432,19 +432,19 @@ export class Verifier {
    * @throws Error if measurements don't match or verification fails
    */
   public async verify(): Promise<AttestationResponse> {
-    const cacheKey = `${this.repo}::${this.enclave}`;
+    const cacheKey = `${this.configRepo}::${this.serverURL}`;
     const cachedResult = Verifier.verificationCache.get(cacheKey);
     if (cachedResult) {
       const attestation = await cachedResult;
       // Ensure verification document is available even for cached results
       if (!this.lastVerificationDocument) {
         // Re-create the document from cached attestation
-        const digest = await this.fetchLatestDigest(this.repo);
-        const { measurement: codeMeasurement } = await this.verifyCode(this.repo, digest);
+        const digest = await this.fetchLatestDigest(this.configRepo);
+        const { measurement: codeMeasurement } = await this.verifyCode(this.configRepo, digest);
         this.lastVerificationDocument = {
-          repo: this.repo,
-          enclaveHost: this.enclave,
-          digest,
+          configRepo: this.configRepo,
+          enclaveHost: this.serverURL,
+          releaseDigest: digest,
           codeMeasurement,
           enclaveMeasurement: attestation,
           match: true, // Must be true since verification succeeded
@@ -455,12 +455,12 @@ export class Verifier {
     
     const verificationPromise = (async () => {
       // Get latest release digest using wrapper
-      const digest = await this.fetchLatestDigest(this.repo);
+      const releaseDigest = await this.fetchLatestDigest(this.configRepo);
 
       // Perform code attestation and runtime attestation in parallel via wrappers
       const [{ measurement: codeMeasurement }, attestation] = await Promise.all([
-        this.verifyCode(this.repo, digest),
-        this.verifyEnclave(this.enclave),
+        this.verifyCode(this.configRepo, releaseDigest),
+        this.verifyEnclave(this.serverURL),
       ]);
 
       // Compare measurements using platform-specific logic
@@ -474,9 +474,9 @@ export class Verifier {
       }
       // Persist a full verification document for later retrieval by clients
       this.lastVerificationDocument = {
-        repo: this.repo,
-        enclaveHost: this.enclave,
-        digest,
+        configRepo: this.configRepo,
+        enclaveHost: this.serverURL,
+        releaseDigest: releaseDigest,
         codeMeasurement,
         enclaveMeasurement: attestation,
         match: true,

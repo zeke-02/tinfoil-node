@@ -141,8 +141,8 @@ export class TinfoilAI {
   ): Promise<OpenAI> {
     // Verify the enclave before establishing a transport
     const verifier = new Verifier({
-      baseURL: this.baseURL,
-      repo: this.configRepo,
+      serverURL: this.baseURL,
+      configRepo: this.configRepo,
     });
 
     try {
