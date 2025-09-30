@@ -12,7 +12,13 @@ describe("TinfoilAI - inference.tinfoil.sh integration", () => {
     }
 
     const { TinfoilAI } = await import("../client");
+    const API_KEY = process.env.TINFOIL_API_KEY || process.env.OPENAI_API_KEY;
+    if (!API_KEY) {
+      t.skip("Set TINFOIL_API_KEY or OPENAI_API_KEY for integration test.");
+      return;
+    }
     const client = new TinfoilAI({
+      apiKey: API_KEY,
       baseURL: "https://inference.tinfoil.sh/v1/",
       configRepo: "tinfoilsh/confidential-inference-proxy",
     });

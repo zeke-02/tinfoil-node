@@ -19,6 +19,8 @@ import { createEncryptedBodyFetch } from "./encrypted-body-fetch";
 import https from "node:https";
 import tls, { checkServerIdentity as tlsCheckServerIdentity } from "node:tls";
 import { X509Certificate, createHash } from "node:crypto";
+import { Readable } from "node:stream";
+import { ReadableStream as NodeReadableStream } from "node:stream/web";
 
 /**
  * Detects if the code is running in a real browser environment.
@@ -113,6 +115,7 @@ export class TinfoilAI {
     // Store properties for compatibility
     this.apiKey = openAIOptions.apiKey;
     this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
+    assertHttpsUrl(this.baseURL, "Inference baseURL");
     this.configRepo =
       options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
@@ -176,38 +179,8 @@ export class TinfoilAI {
         );
       }
       
-      // Node.js environment: fall back to TLS-only verification
-      const httpsAgent = new https.Agent({
-        checkServerIdentity: (
-          host: string,
-          cert: tls.PeerCertificate,
-        ): Error | undefined => {
-          if (!cert.pubkey) {
-            throw new Error("No public key available in certificate");
-          }
-          const x509 = new X509Certificate(cert.raw);
-          const publicKeyDer = x509.publicKey.export({
-            type: "spki",
-            format: "der",
-          });
-          const pubKeyFP = createHash("sha256").update(publicKeyDer).digest("hex");
-          if (pubKeyFP !== tlsPublicKeyFingerprint) {
-            throw new Error(
-              `Certificate public key fingerprint mismatch. Expected: ${tlsPublicKeyFingerprint}, Got: ${pubKeyFP}`,
-            );
-          }
-
-          return tlsCheckServerIdentity(host, cert);
-        },
-      });
-      
-      fetchFunction = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const finalInit = {
-          ...init,
-          agent: httpsAgent,
-        } as any; // Node.js fetch accepts agent in init options
-        return fetch(input, finalInit);
-      }) as typeof fetch;
+      // Node.js environment: fall back to TLS-only verification using pinned TLS fetch
+      fetchFunction = createPinnedTlsFetch(tlsPublicKeyFingerprint);
     }
 
     const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
@@ -354,4 +327,120 @@ export namespace TinfoilAI {
   export import Responses = OpenAI.Responses;
   export import Uploads = OpenAI.Uploads;
   export import VectorStores = OpenAI.VectorStores;
+}
+
+function assertHttpsUrl(url: string, context: string): void {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "https:") {
+    throw new Error(`${context} must use HTTPS. Got: ${url}`);
+  }
+}
+
+function createPinnedTlsFetch(expectedFingerprintHex: string): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    // Normalize URL
+    const makeURL = (value: RequestInfo | URL): URL => {
+      if (typeof value === "string") return new URL(value);
+      if (value instanceof URL) return value;
+      return new URL((value as Request).url);
+    };
+
+    const url = makeURL(input);
+    if (url.protocol !== "https:") {
+      throw new Error(`HTTP connections are not allowed. Use HTTPS. URL: ${url.toString()}`);
+    }
+
+    // Gather method and headers
+    const method = (init?.method || (input as any).method || "GET").toUpperCase();
+    const headers = new Headers(init?.headers || (input as any)?.headers || {});
+    const headerObj: Record<string, string> = {};
+    headers.forEach((v, k) => {
+      headerObj[k] = v;
+    });
+
+    // Resolve body
+    let body: any = init?.body;
+    if (!body && input instanceof Request) {
+      // If the original was a Request with a body, read it
+      try {
+        const buf = await (input as Request).arrayBuffer();
+        if (buf && (buf as ArrayBuffer).byteLength) body = Buffer.from(buf as ArrayBuffer);
+      } catch {}
+    }
+    // Convert web streams to Node streams if needed
+    if (body && typeof (body as any).getReader === "function") {
+      body = Readable.fromWeb(body as unknown as NodeReadableStream);
+    }
+    if (body instanceof ArrayBuffer) {
+      body = Buffer.from(body);
+    }
+    if (ArrayBuffer.isView(body)) {
+      body = Buffer.from(body.buffer, body.byteOffset, body.byteLength);
+    }
+
+    const requestOptions: https.RequestOptions & tls.ConnectionOptions = {
+      protocol: url.protocol,
+      hostname: url.hostname,
+      port: url.port ? Number(url.port) : 443,
+      path: `${url.pathname}${url.search}`,
+      method,
+      headers: headerObj,
+      checkServerIdentity: (host, cert): Error | undefined => {
+        const raw = (cert as any).raw as Buffer | undefined;
+        if (!raw) {
+          return new Error("Certificate raw bytes are unavailable for pinning");
+        }
+        const x509 = new X509Certificate(raw);
+        const publicKeyDer = x509.publicKey.export({ type: "spki", format: "der" });
+        const fp = createHash("sha256").update(publicKeyDer).digest("hex");
+        if (fp !== expectedFingerprintHex) {
+          return new Error(`Certificate public key fingerprint mismatch. Expected: ${expectedFingerprintHex}, Got: ${fp}`);
+        }
+        return tlsCheckServerIdentity(host, cert);
+      },
+    };
+
+    const { signal } = init || {};
+
+    const res = await new Promise<import("node:http").IncomingMessage>((resolve, reject) => {
+      const req = https.request(requestOptions, resolve);
+      req.on("error", reject);
+      if (signal) {
+        if ((signal as AbortSignal).aborted) {
+          req.destroy(new Error("Request aborted"));
+          return;
+        }
+        (signal as AbortSignal).addEventListener("abort", () => req.destroy(new Error("Request aborted")));
+      }
+      if (body === undefined || body === null) {
+        req.end();
+      } else if (typeof body === "string" || Buffer.isBuffer(body) || ArrayBuffer.isView(body)) {
+        req.end(body as any);
+      } else if (typeof (body as any).pipe === "function") {
+        (body as any).pipe(req);
+      } else {
+        // Fallback: try to serialize objects
+        req.end(String(body));
+      }
+    });
+
+    const responseHeaders = new Headers();
+    for (const [k, v] of Object.entries(res.headers)) {
+      if (Array.isArray(v)) {
+        for (const item of v) responseHeaders.append(k, item);
+      } else if (typeof v === "string") {
+        responseHeaders.set(k, v);
+      } else if (typeof v === "number") {
+        responseHeaders.set(k, String(v));
+      }
+    }
+
+    // Convert Node stream to Web ReadableStream
+    const webStream = Readable.toWeb(res as unknown as import("node:stream").Readable) as unknown as ReadableStream;
+    return new Response(webStream, {
+      status: res.statusCode || 0,
+      statusText: res.statusMessage || "",
+      headers: responseHeaders,
+    });
+  }) as typeof fetch;
 }
