@@ -27,8 +27,6 @@ export async function createTinfoilAI(apiKey: string, options: CreateTinfoilAIOp
   const baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
   const configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
-  assertHttpsUrl(baseURL, "Inference baseURL");
-
   // step 1: verify the enclave and extract the public keys
   // from the attestation response
   const verifier = new Verifier({ serverURL: baseURL, configRepo });
@@ -68,13 +66,6 @@ export async function createTinfoilAI(apiKey: string, options: CreateTinfoilAIOp
     apiKey: apiKey,
     fetch: fetchFunction,
   });
-}
-
-function assertHttpsUrl(url: string, context: string): void {
-  const parsed = new URL(url);
-  if (parsed.protocol !== "https:") {
-    throw new Error(`${context} must use HTTPS. Got: ${url}`);
-  }
 }
 
 function createPinnedTlsFetch(expectedFingerprintHex: string): typeof fetch {

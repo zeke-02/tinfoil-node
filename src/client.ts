@@ -115,7 +115,6 @@ export class TinfoilAI {
     // Store properties for compatibility
     this.apiKey = openAIOptions.apiKey;
     this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
-    assertHttpsUrl(this.baseURL, "Inference baseURL");
     this.configRepo =
       options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
@@ -332,13 +331,6 @@ export namespace TinfoilAI {
   export import Responses = OpenAI.Responses;
   export import Uploads = OpenAI.Uploads;
   export import VectorStores = OpenAI.VectorStores;
-}
-
-function assertHttpsUrl(url: string, context: string): void {
-  const parsed = new URL(url);
-  if (parsed.protocol !== "https:") {
-    throw new Error(`${context} must use HTTPS. Got: ${url}`);
-  }
 }
 
 function createPinnedTlsFetch(expectedFingerprintHex: string): typeof fetch {

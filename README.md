@@ -65,6 +65,9 @@ const completion = await client.chat.completions.create({
 - WebAssembly support for enclave verification
 - Secure context (HTTPS or localhost) with WebCrypto SubtleCrypto (required by EHBP)
 
+> **Note**
+> The EHBP transport now accepts `http://` origins (for example when developing against a `localhost` proxy). Payloads remain HPKE-encrypted end to end, while TLS-only fallback logic continues to require HTTPS because it relies on certificate pinning.
+
 
 ## Verification helpers
 

@@ -47,9 +47,6 @@ export async function encryptedBodyRequest(
   );
 
   const u = new URL(requestUrl);
-  if (u.protocol !== 'https:') {
-    throw new Error(`HTTP connections are not allowed for EHBP. Use HTTPS. URL: ${requestUrl}`);
-  }
   const { origin } = u;
   const transport = await getTransportForOrigin(origin);
 
@@ -64,10 +61,6 @@ export async function encryptedBodyRequest(
 
 export function createEncryptedBodyFetch(baseURL: string, hpkePublicKey: string): typeof fetch {
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const base = new URL(baseURL);
-    if (base.protocol !== 'https:') {
-      throw new Error(`EHBP baseURL must use HTTPS. Got: ${baseURL}`);
-    }
     const normalized = normalizeEncryptedBodyRequestArgs(input, init);
     const targetUrl = new URL(normalized.url, baseURL);
 
@@ -112,11 +105,6 @@ async function getTransportForOrigin(origin: string): Promise<EhbpTransport> {
 
   const transportPromise = (async () => {
     const { Identity, createTransport } = await getEhbpModule();
-    const proto = new URL(origin).protocol;
-    if (proto !== 'https:') {
-      throw new Error(`EHBP requires HTTPS origin. Got: ${origin}`);
-    }
-    
     // Ensure we're in a secure context with WebCrypto Subtle available (required by EHBP)
     if (typeof globalThis !== 'undefined') {
       const isSecure = (globalThis as any).isSecureContext !== false;

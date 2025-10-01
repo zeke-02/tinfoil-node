@@ -2,26 +2,67 @@ import { describe, it } from "node:test";
 import type { TestContext } from "node:test";
 import assert from "node:assert";
 import { withMockedModules } from "./test-utils";
-import { encryptedBodyRequest, createEncryptedBodyFetch } from "../encrypted-body-fetch";
+import {
+  __resetEhbpModuleStateForTests,
+  __setEhbpModuleForTests,
+  encryptedBodyRequest,
+  createEncryptedBodyFetch,
+} from "../encrypted-body-fetch";
 
 const MOCK_FP = "a3b1c5d7e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f506172839a";
 const MOCK_MEASUREMENT_TYPE = "https://tinfoil.sh/predicate/sev-snp-guest/v1";
 
 describe("Security enforcement", () => {
-  it("EHBP helpers reject HTTP URLs and baseURL", async () => {
-    await assert.rejects(
-      encryptedBodyRequest("http://insecure.test/v1/models", "hpke-key"),
-      /HTTP connections are not allowed/i,
+  const mockEhbpModule = (
+    transportRequest: (url: string, init?: RequestInit) => Promise<Response>,
+    getServerPublicKeyHex: () => Promise<string>,
+    identityGenerate: () => Promise<unknown>,
+  ) => ({
+    Identity: { generate: identityGenerate } as any,
+    createTransport: async () => ({
+      request: transportRequest,
+      getServerPublicKeyHex,
+    }),
+    Transport: class {},
+    PROTOCOL: {},
+    HPKE_CONFIG: {},
+  });
+
+  const withEhbpMock = async (
+    stub: ReturnType<typeof mockEhbpModule>,
+    run: () => Promise<void>,
+  ) => {
+    try {
+      __setEhbpModuleForTests(stub as any);
+      await run();
+    } finally {
+      __resetEhbpModuleStateForTests();
+    }
+  };
+
+  it("EHBP helpers allow HTTP origins while keeping HPKE enforcement", async (t: TestContext) => {
+    const transportRequest = t.mock.fn(
+      async (_url: string, _init?: RequestInit) => new Response("ok"),
+    );
+    const getServerPublicKeyHex = t.mock.fn(async () => "hpke-key");
+    const identityGenerate = t.mock.fn(async () => ({ __mockIdentity: true }));
+
+    await withEhbpMock(
+      mockEhbpModule(transportRequest, getServerPublicKeyHex, identityGenerate),
+      async () => {
+        await encryptedBodyRequest("http://localhost:8080/v1/models", "hpke-key");
+
+        const fetchThroughProxy = createEncryptedBodyFetch(
+          "http://localhost:8080/v1/",
+          "hpke-key",
+        );
+        await fetchThroughProxy("models");
+      },
     );
 
-    const create = () => createEncryptedBodyFetch("http://insecure.test/v1/", "hpke-key");
-    await assert.rejects(
-      (async () => {
-        const f = create();
-        await f("models");
-      })(),
-      /must use HTTPS|HTTP connections are not allowed/i,
-    );
+    assert.strictEqual(identityGenerate.mock.callCount(), 1);
+    assert.strictEqual(getServerPublicKeyHex.mock.callCount(), 2);
+    assert.strictEqual(transportRequest.mock.callCount(), 2);
   });
 
   it("TinfoilAI TLS fallback uses pinned fetch that rejects HTTP", async (t: TestContext) => {
