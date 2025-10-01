@@ -13,7 +13,7 @@ npm install tinfoil
 
 ## Requirements
 
-Node 20.18.1 and higher.
+Node 20+.
 
 ## Quick Start
 
