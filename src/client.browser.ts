@@ -140,6 +140,14 @@ export class TinfoilAI {
     return this.client!;
   }
 
+  public async getVerificationDocument(): Promise<VerificationDocument> {
+    await this.ready();
+    if (!this.verificationDocument) {
+      throw new Error("Verification document unavailable: client not verified yet");
+    }
+    return this.verificationDocument;
+  }
+
   get chat(): Chat {
     return createAsyncProxy(this.ensureReady().then((client) => client.chat));
   }
