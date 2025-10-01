@@ -196,7 +196,8 @@ function compareMeasurementsError(
         return null;
       }
 
-      case PLATFORM_TYPES.SEV_GUEST_V1: {
+      case PLATFORM_TYPES.SEV_GUEST_V1:
+      case PLATFORM_TYPES.SEV_GUEST_V2: {
         if (codeMeasurement.registers.length < 1 || runtimeMeasurement.registers.length < 1) {
           return new Error(MEASUREMENT_ERROR_MESSAGES.FEW_REGISTERS);
         }
@@ -587,12 +588,12 @@ export class Verifier {
       ]);
 
       // Compare measurements using platform-specific logic
-      const measurementsMatch = compareMeasurements(codeMeasurement, attestation.measurement);
+      const measurementsMatchError = compareMeasurementsError(codeMeasurement, attestation.measurement);
       
-      if (!measurementsMatch) {
+      if (measurementsMatchError) {
         throw new Error(
           `Measurement verification failed: Code measurement (${codeMeasurement.type}) ` +
-          `does not match runtime measurement (${attestation.measurement.type})`
+          `does not match runtime measurement (${attestation.measurement.type}): ${measurementsMatchError.message}`
         );
       }
       // Persist a full verification document for later retrieval by clients
