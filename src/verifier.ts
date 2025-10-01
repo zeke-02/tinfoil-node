@@ -624,7 +624,43 @@ export class Verifier {
 }
 
 // Start initialization as soon as the module loads
-Verifier.initializeWasm().catch(console.error);
+function shouldAutoInitializeWasm(): boolean {
+  const globalAny = globalThis as typeof globalThis & {
+    process?: {
+      env?: Record<string, string | undefined>;
+      versions?: { node?: string };
+    };
+    window?: unknown;
+    document?: unknown;
+  };
+
+  const env = globalAny.process?.env;
+  const autoInitFlag = env?.TINFOIL_SKIP_WASM_AUTO_INIT ?? env?.TINFOIL_DISABLE_WASM_AUTO_INIT;
+  if (typeof autoInitFlag === "string") {
+    const normalized = autoInitFlag.toLowerCase();
+    if (normalized === "1" || normalized === "true") {
+      return false;
+    }
+  }
+
+  if (env?.NODE_ENV === "test") {
+    return false;
+  }
+
+  const isNode = typeof globalAny.process?.versions?.node === "string";
+  if (isNode) {
+    return false;
+  }
+
+  const hasBrowserGlobals = typeof globalAny.window === "object" && typeof globalAny.document === "object";
+  return hasBrowserGlobals;
+}
+
+if (shouldAutoInitializeWasm()) {
+  void Verifier.initializeWasm().catch(error => {
+    console.error(error);
+  });
+}
 
 /**
  * Control WASM log output
