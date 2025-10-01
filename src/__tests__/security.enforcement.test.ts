@@ -5,6 +5,7 @@ import { withMockedModules } from "./test-utils";
 import { encryptedBodyRequest, createEncryptedBodyFetch } from "../encrypted-body-fetch";
 
 const MOCK_FP = "a3b1c5d7e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f506172839a";
+const MOCK_MEASUREMENT_TYPE = "https://tinfoil.sh/predicate/sev-snp-guest/v1";
 
 describe("Security enforcement", () => {
   it("EHBP helpers reject HTTP URLs and baseURL", async () => {
@@ -27,7 +28,7 @@ describe("Security enforcement", () => {
     const verifyMock = t.mock.fn(async () => ({
       tlsPublicKeyFingerprint: MOCK_FP,
       // No HPKE key triggers TLS fallback
-      measurement: { type: "eif", registers: [] },
+      measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
     }));
 
     let capturedFetch: typeof fetch | undefined;
@@ -49,10 +50,10 @@ describe("Security enforcement", () => {
                 configRepo: "owner/repo",
                 enclaveHost: "insecure.test",
                 releaseDigest: "deadbeef",
-                codeMeasurement: { type: "eif", registers: [] },
+                codeMeasurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 enclaveMeasurement: {
                   tlsPublicKeyFingerprint: MOCK_FP,
-                  measurement: { type: "eif", registers: [] },
+                  measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 },
                 match: true,
               };
@@ -78,7 +79,7 @@ describe("Security enforcement", () => {
   it("AI SDK provider TLS fallback uses pinned fetch that rejects HTTP", async (t: TestContext) => {
     const verifyMock = t.mock.fn(async () => ({
       tlsPublicKeyFingerprint: MOCK_FP,
-      measurement: { type: "eif", registers: [] },
+      measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
     }));
 
     let capturedFetch: typeof fetch | undefined;
@@ -100,10 +101,10 @@ describe("Security enforcement", () => {
                 configRepo: "owner/repo",
                 enclaveHost: "secure.test",
                 releaseDigest: "deadbeef",
-                codeMeasurement: { type: "eif", registers: [] },
+                codeMeasurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 enclaveMeasurement: {
                   tlsPublicKeyFingerprint: MOCK_FP,
-                  measurement: { type: "eif", registers: [] },
+                  measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 },
                 match: true,
               };
@@ -127,4 +128,3 @@ describe("Security enforcement", () => {
     );
   });
 });
-

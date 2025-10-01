@@ -451,15 +451,35 @@ export class Verifier {
       throw new Error("WASM verifyCode function not available");
     }
     
-    const codeMeasurement = await globalThis.verifyCode(configRepo, digest);
-    
-    if (!codeMeasurement || typeof codeMeasurement !== 'object') {
+    const rawMeasurement = await globalThis.verifyCode(configRepo, digest);
+
+    const normalizedMeasurement =
+      typeof rawMeasurement === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(rawMeasurement) as unknown;
+            } catch (error) {
+              throw new Error(`Invalid code measurement format: ${(error as Error).message}`);
+            }
+          })()
+        : rawMeasurement;
+
+    if (!normalizedMeasurement || typeof normalizedMeasurement !== 'object') {
       throw new Error('Invalid code measurement format');
     }
-    
+
+    const measurementObject = normalizedMeasurement as {
+      type?: unknown;
+      registers?: unknown;
+    };
+
+    if (typeof measurementObject.type !== 'string' || !Array.isArray(measurementObject.registers)) {
+      throw new Error('Invalid code measurement format');
+    }
+
     const parsedCodeMeasurement: AttestationMeasurement = {
-      type: codeMeasurement.type || 'unknown',
-      registers: codeMeasurement.registers || []
+      type: measurementObject.type,
+      registers: measurementObject.registers.map((value) => String(value))
     };
     
     return { measurement: parsedCodeMeasurement };
