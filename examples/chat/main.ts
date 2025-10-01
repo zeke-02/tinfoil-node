@@ -21,7 +21,10 @@ async function main() {
     await runVerificationDemo();
 
     // 5) Create a client and run the streaming chat example
-    const client = new TinfoilAI({}); // apiKey is read from TINFOIL_API_KEY
+    const client = new TinfoilAI({
+      baseURL: "https://ehbp.inf6.tinfoil.sh/v1/",
+      configRepo: "tinfoilsh/confidential-inference-proxy-hpke",
+    }); // apiKey is read from TINFOIL_API_KEY
     await runStreamingExample(client);
   } catch (error) {
     console.error("Main error:", error);
