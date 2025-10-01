@@ -7,6 +7,8 @@ function makeHex64(): string {
   return "b".repeat(64);
 }
 
+const MOCK_MEASUREMENT_TYPE = "https://tinfoil.sh/predicate/sev-snp-guest/v1";
+
 describe("Verifier verify() failure when code attestation mismatches", () => {
   it("throws if verifyEnclave succeeds but verifyCode mismatches", async (t: TestContext) => {
     const fetchMock = t.mock.fn(async (input: RequestInfo) => {
@@ -47,13 +49,13 @@ describe("Verifier verify() failure when code attestation mismatches", () => {
           };
           // Runtime attestation succeeds and returns HPKE key
           (globalThis as any).verifyEnclave = async (_h: string) => ({
-            measurement: { type: "eif", registers: ["r1", "r2"] },
+            measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1", "r2"] },
             tls_public_key: "tls-fp",
             hpke_public_key: "hpke-key",
           });
           // Code attestation returns a different measurement -> mismatch
           (globalThis as any).verifyCode = async (_r: string, _d: string) => ({
-            type: "eif",
+            type: MOCK_MEASUREMENT_TYPE,
             registers: ["r1", "DIFFERENT"],
           });
 
@@ -73,5 +75,4 @@ describe("Verifier verify() failure when code attestation mismatches", () => {
     }
   });
 });
-
 

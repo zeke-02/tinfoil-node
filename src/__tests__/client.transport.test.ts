@@ -4,12 +4,14 @@ import assert from "node:assert";
 import { TINFOIL_CONFIG } from "../config";
 import { withMockedModules } from "./test-utils";
 
+const MOCK_MEASUREMENT_TYPE = "https://tinfoil.sh/predicate/sev-snp-guest/v1";
+
 describe("Secure transport integration", () => {
   it("configures the OpenAI SDK to use the encrypted body transport", async (t: TestContext) => {
     const verifyMock = t.mock.fn(async () => ({
       tlsPublicKeyFingerprint: "fingerprint",
       hpkePublicKey: "mock-hpke-public-key",
-      measurement: { type: "eif", registers: [] },
+      measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
     }));
     const mockFetch = t.mock.fn(async () => new Response(null));
     const createEncryptedBodyFetchMock = t.mock.fn(
@@ -46,11 +48,11 @@ describe("Secure transport integration", () => {
                 configRepo: "test-repo",
                 enclaveHost: "test-host",
                 digest: "test-digest",
-                codeMeasurement: { type: "eif", registers: [] },
+                codeMeasurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 enclaveMeasurement: {
                   tlsPublicKeyFingerprint: "fingerprint",
                   hpkePublicKey: "mock-hpke-public-key",
-                  measurement: { type: "eif", registers: [] },
+                  measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 },
                 match: true,
               };
@@ -94,7 +96,7 @@ describe("Secure transport integration", () => {
     const verifyMock = t.mock.fn(async () => ({
       tlsPublicKeyFingerprint: "fingerprint",
       hpkePublicKey: "mock-hpke-public-key",
-      measurement: { type: "eif", registers: [] },
+      measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
     }));
     const mockFetch = t.mock.fn(async () => new Response(null));
     const createEncryptedBodyFetchMock = t.mock.fn(
@@ -116,11 +118,11 @@ describe("Secure transport integration", () => {
                 configRepo: "test-repo",
                 enclaveHost: "test-host",
                 digest: "test-digest",
-                codeMeasurement: { type: "eif", registers: [] },
+                codeMeasurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 enclaveMeasurement: {
                   tlsPublicKeyFingerprint: "fingerprint",
                   hpkePublicKey: "mock-hpke-public-key",
-                  measurement: { type: "eif", registers: [] },
+                  measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 },
                 match: true,
               };

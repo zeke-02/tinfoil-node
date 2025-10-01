@@ -6,14 +6,43 @@
   "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "browser": {
-    "./dist/index.js": "./dist/esm/index.js"
+    "./dist/index.js": "./dist/esm/index.browser.js",
+    "./dist/esm/index.js": "./dist/esm/index.browser.js"
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
+      "browser": "./dist/esm/index.browser.js",
       "import": "./dist/esm/index.js",
+      "require": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "browser": "./dist/esm/client.browser.js",
+      "import": "./dist/esm/client.js",
+      "require": "./dist/client.js"
+    },
+    "./ai-sdk-provider": {
+      "types": "./dist/ai-sdk-provider.d.ts",
+      "browser": "./dist/esm/ai-sdk-provider.browser.js",
+      "import": "./dist/esm/ai-sdk-provider.js",
+      "require": "./dist/ai-sdk-provider.js"
+    },
+    "./verifier": {
+      "types": "./dist/verifier.d.ts",
+      "import": "./dist/esm/verifier.js",
+      "require": "./dist/verifier.js"
+    },
+    "./verification-runner": {
+      "types": "./dist/verification-runner.d.ts",
+      "import": "./dist/esm/verification-runner.js",
+      "require": "./dist/verification-runner.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/esm/config.js",
+      "require": "./dist/config.js"
     }
   },
   "scripts": {

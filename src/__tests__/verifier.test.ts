@@ -7,6 +7,8 @@ function makeHex64(): string {
   return "a".repeat(64);
 }
 
+const MOCK_MEASUREMENT_TYPE = "https://tinfoil.sh/predicate/sev-snp-guest/v1";
+
 describe("Verifier helpers", () => {
   it("loadVerifier + runVerification success flow with updates", async (t: TestContext) => {
     const fetchMock = t.mock.fn(async (input: RequestInfo) => {
@@ -47,14 +49,15 @@ describe("Verifier helpers", () => {
             }
           };
           (globalThis as any).verifyEnclave = async (_h: string) => ({
-            measurement: { type: "eif", registers: ["r1", "r2"] },
+            measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1", "r2"] },
             tls_public_key: "tls-fp",
             hpke_public_key: "hpke-key",
           });
-          (globalThis as any).verifyCode = async (_r: string, _d: string) => ({
-            type: "eif",
-            registers: ["r1", "r2"],
-          });
+          (globalThis as any).verifyCode = async (_r: string, _d: string) =>
+            JSON.stringify({
+              type: MOCK_MEASUREMENT_TYPE,
+              registers: ["r1", "r2"],
+            });
 
           const { loadVerifier } = await import("../verification-runner");
           const client = await loadVerifier();
@@ -74,7 +77,7 @@ describe("Verifier helpers", () => {
           assert.strictEqual(result.verification.status, "success");
           assert.strictEqual(result.verification.securityVerified, true);
           assert.strictEqual(result.runtime.status, "success");
-          assert.deepStrictEqual(result.runtime.measurement, { type: "eif", registers: ["r1", "r2"] });
+          assert.deepStrictEqual(result.runtime.measurement, { type: MOCK_MEASUREMENT_TYPE, registers: ["r1", "r2"] });
           assert.strictEqual(result.runtime.tlsPublicKeyFingerprint, "tls-fp");
           assert.strictEqual(result.runtime.hpkePublicKey, "hpke-key");
           assert.strictEqual(typeof result.releaseDigest, "string");
@@ -128,11 +131,11 @@ describe("Verifier helpers", () => {
             }
           };
           (globalThis as any).verifyEnclave = async (_h: string) => ({
-            measurement: { type: "eif", registers: ["r1"] },
+            measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1"] },
             // Missing keys on purpose
           });
           (globalThis as any).verifyCode = async (_r: string, _d: string) => ({
-            type: "eif",
+            type: MOCK_MEASUREMENT_TYPE,
             registers: ["r1"],
           });
 
@@ -184,12 +187,12 @@ describe("Verifier helpers", () => {
             }
           };
           (globalThis as any).verifyEnclave = async (_h: string) => ({
-            measurement: { type: "eif", registers: ["x"] },
+            measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["x"] },
             tls_public_key: "fp",
             hpke_public_key: "hpke",
           });
           (globalThis as any).verifyCode = async (_r: string, _d: string) => ({
-            type: "eif",
+            type: MOCK_MEASUREMENT_TYPE,
             registers: ["x"],
           });
 
