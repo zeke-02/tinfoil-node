@@ -39,7 +39,7 @@
  *
  * SUPPORTED PLATFORMS AND PREDICATES
  * - Predicate types supported by this client: SNP/TDX multi-platform v1,
- *   TDX guest v1, SEV-SNP guest v2
+ *   TDX guest v1, SEV-SNP guest v1
  * - See `compareMeasurements()` for exact register mapping rules
  *
  * PUBLIC API (this module)
@@ -110,9 +110,22 @@ export interface AttestationMeasurement {
 // Platform type constants
 // See https://github.com/tinfoilsh/verifier/
 const PLATFORM_TYPES = {
-  SNP_TDX_MULTI_PLATFORM_V1: 'https://tinfoil.sh/predicate/snp-tdx-multiplatform/v1',
-  TDX_GUEST_V1: 'https://tinfoil.sh/predicate/tdx-guest/v1',
-  SEV_GUEST_V1: 'https://tinfoil.sh/predicate/sev-snp-guest/v2'
+  SNP_TDX_MULTI_PLATFORM_V1: "https://tinfoil.sh/predicate/snp-tdx-multiplatform/v1",
+  TDX_GUEST_V1: "https://tinfoil.sh/predicate/tdx-guest/v1",
+  TDX_GUEST_V2: "https://tinfoil.sh/predicate/tdx-guest/v2",
+  SEV_GUEST_V1: "https://tinfoil.sh/predicate/sev-snp-guest/v1",
+  SEV_GUEST_V2: "https://tinfoil.sh/predicate/sev-snp-guest/v2",
+  HARDWARE_MEASUREMENTS_V1: "https://tinfoil.sh/predicate/hardware-measurements/v1",
+} as const;
+
+const MEASUREMENT_ERROR_MESSAGES = {
+  FORMAT_MISMATCH: "attestation format mismatch",
+  MEASUREMENT_MISMATCH: "measurement mismatch",
+  RTMR1_MISMATCH: "RTMR1 mismatch",
+  RTMR2_MISMATCH: "RTMR2 mismatch",
+  FEW_REGISTERS: "fewer registers than expected",
+  MULTI_PLATFORM_MISMATCH: "multi-platform measurement mismatch",
+  MULTI_PLATFORM_SEV_SNP_MISMATCH: "multi-platform SEV-SNP measurement mismatch",
 } as const;
 
 /**
@@ -137,6 +150,100 @@ export interface VerificationDocument {
   match: boolean;
 }
 
+function registersEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  return a.every((value, index) => value === b[index]);
+}
+
+function compareMeasurementsError(
+  codeMeasurement: AttestationMeasurement,
+  runtimeMeasurement: AttestationMeasurement,
+): Error | null {
+  if (
+    codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1 &&
+    runtimeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1
+  ) {
+    if (!registersEqual(codeMeasurement.registers, runtimeMeasurement.registers)) {
+      return new Error(MEASUREMENT_ERROR_MESSAGES.MULTI_PLATFORM_MISMATCH);
+    }
+    return null;
+  }
+
+  if (runtimeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
+    return compareMeasurementsError(runtimeMeasurement, codeMeasurement);
+  }
+
+  if (codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
+    switch (runtimeMeasurement.type) {
+      case PLATFORM_TYPES.TDX_GUEST_V1: {
+        if (codeMeasurement.registers.length < 3 || runtimeMeasurement.registers.length < 4) {
+          return new Error(MEASUREMENT_ERROR_MESSAGES.FEW_REGISTERS);
+        }
+
+        const expectedRtmr1 = codeMeasurement.registers[1];
+        const expectedRtmr2 = codeMeasurement.registers[2];
+        const actualRtmr1 = runtimeMeasurement.registers[2];
+        const actualRtmr2 = runtimeMeasurement.registers[3];
+
+        if (expectedRtmr1 !== actualRtmr1) {
+          return new Error(MEASUREMENT_ERROR_MESSAGES.RTMR1_MISMATCH);
+        }
+        if (expectedRtmr2 !== actualRtmr2) {
+          return new Error(MEASUREMENT_ERROR_MESSAGES.RTMR2_MISMATCH);
+        }
+        return null;
+      }
+
+      case PLATFORM_TYPES.SEV_GUEST_V1: {
+        if (codeMeasurement.registers.length < 1 || runtimeMeasurement.registers.length < 1) {
+          return new Error(MEASUREMENT_ERROR_MESSAGES.FEW_REGISTERS);
+        }
+
+        const expectedSevSnp = codeMeasurement.registers[0];
+        const actualSevSnp = runtimeMeasurement.registers[0];
+
+        if (expectedSevSnp !== actualSevSnp) {
+          return new Error(MEASUREMENT_ERROR_MESSAGES.MULTI_PLATFORM_SEV_SNP_MISMATCH);
+        }
+        return null;
+      }
+
+      default:
+        return new Error(
+          `unsupported enclave platform for multi-platform code measurements: ${runtimeMeasurement.type}`,
+        );
+    }
+  }
+
+  if (codeMeasurement.type !== runtimeMeasurement.type) {
+    return new Error(MEASUREMENT_ERROR_MESSAGES.FORMAT_MISMATCH);
+  }
+
+  if (!registersEqual(codeMeasurement.registers, runtimeMeasurement.registers)) {
+    return new Error(MEASUREMENT_ERROR_MESSAGES.MEASUREMENT_MISMATCH);
+  }
+
+  return null;
+}
+
+export interface MeasurementComparisonResult {
+  match: boolean;
+  error?: Error;
+}
+
+export function compareMeasurementsDetailed(
+  codeMeasurement: AttestationMeasurement,
+  runtimeMeasurement: AttestationMeasurement,
+): MeasurementComparisonResult {
+  const error = compareMeasurementsError(codeMeasurement, runtimeMeasurement);
+  if (error) {
+    return { match: false, error };
+  }
+  return { match: true };
+}
+
 /**
 * Compare two measurements according to platform-specific rules
 * This is predicate function for comparing attestation measurements
@@ -150,55 +257,7 @@ export function compareMeasurements(
   codeMeasurement: AttestationMeasurement,
   runtimeMeasurement: AttestationMeasurement,
 ): boolean {
-  // Both are multi-platform: compare all registers directly
-  if (codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1 && 
-      runtimeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
-    return JSON.stringify(codeMeasurement.registers) === JSON.stringify(runtimeMeasurement.registers);
-  }
-
-  // If runtime is multi-platform, flip the comparison
-  if (runtimeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
-    return compareMeasurements(runtimeMeasurement, codeMeasurement);
-  }
-
-  // Code is multi-platform, runtime is specific platform
-  if (codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
-    switch (runtimeMeasurement.type) {
-      case PLATFORM_TYPES.TDX_GUEST_V1: {
-        // For TDX: compare RTMR1 and RTMR2
-        // Multi-platform format: [SNP_MEASUREMENT, RTMR1, RTMR2]
-        // TDX format: [MRTD, RTMR0, RTMR1, RTMR2]
-        if (codeMeasurement.registers.length < 3 || runtimeMeasurement.registers.length < 4) {
-          return false;
-        }
-        const expectedRtmr1 = codeMeasurement.registers[1]; // Position 1 in multi-platform
-        const expectedRtmr2 = codeMeasurement.registers[2]; // Position 2 in multi-platform
-        const actualRtmr1 = runtimeMeasurement.registers[2]; // Position 2 in TDX (0=MRTD, 1=RTMR0)
-        const actualRtmr2 = runtimeMeasurement.registers[3]; // Position 3 in TDX
-        
-        return expectedRtmr1 === actualRtmr1 && expectedRtmr2 === actualRtmr2;
-      }
-        
-      case PLATFORM_TYPES.SEV_GUEST_V1: {
-        // For SEV: compare only the first register (SEV SNP measurement)
-        if (codeMeasurement.registers.length < 1 || runtimeMeasurement.registers.length < 1) {
-          return false;
-        }
-        
-        return codeMeasurement.registers[0] === runtimeMeasurement.registers[0];
-      }
-        
-      default:
-        throw new Error(`Unsupported platform type for comparison: ${runtimeMeasurement.type}`);
-    }
-  }
-
-  // Neither is multi-platform: types must match and all registers must match
-  if (codeMeasurement.type !== runtimeMeasurement.type) {
-    return false;
-  }
-
-  return JSON.stringify(codeMeasurement.registers) === JSON.stringify(runtimeMeasurement.registers);
+  return compareMeasurementsError(codeMeasurement, runtimeMeasurement) === null;
 }
 
 
