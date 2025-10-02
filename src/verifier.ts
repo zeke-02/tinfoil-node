@@ -28,7 +28,6 @@
  * - Works in Node 20+ and modern browsers with lightweight polyfills for
  *   `performance`, `TextEncoder`/`TextDecoder`, and `crypto.getRandomValues`
  * - Go stdout/stderr is suppressed by default; toggle via `suppressWasmLogs()`
- * - Successful end-to-end results are cached per `configRepo::enclave::digest` for the process lifetime
  * - Module auto-initializes the WASM runtime on import
  *
  * PROXIES AND TRUST
@@ -274,7 +273,6 @@ export function compareMeasurements(
 export class Verifier {
   private static goInstance: any = null;
   private static initializationPromise: Promise<void> | null = null;
-  private static verificationCache = new Map<string, Promise<AttestationResponse>>();
   private static readonly defaultWasmUrl =
     "https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm";
   public static originalFsWriteSync: ((fd: number, buf: Uint8Array) => number) | null = null;
@@ -283,10 +281,6 @@ export class Verifier {
 
   // Stores the full verification document for the last successful verification
   private lastVerificationDocument?: VerificationDocument;
-
-  public static clearVerificationCache(): void {
-    Verifier.verificationCache.clear();
-  }
 
   // Configuration for the target enclave and repository
   protected readonly serverURL: string;
@@ -558,62 +552,33 @@ export class Verifier {
    * @throws Error if measurements don't match or verification fails
    */
   public async verify(): Promise<AttestationResponse> {
-    // Get latest release digest first to include in cache key
+    // Get latest release digest first
     const releaseDigest = await this.fetchLatestDigest(this.configRepo);
-    const cacheKey = `${this.configRepo}::${this.serverURL}::${releaseDigest}`;
-    const cachedResult = Verifier.verificationCache.get(cacheKey);
-    if (cachedResult) {
-      const attestation = await cachedResult;
-      // Ensure verification document is available even for cached results
-      if (!this.lastVerificationDocument) {
-        // Re-create the document from cached attestation
-        const { measurement: codeMeasurement } = await this.verifyCode(this.configRepo, releaseDigest);
-        this.lastVerificationDocument = {
-          configRepo: this.configRepo,
-          enclaveHost: this.serverURL,
-          releaseDigest: releaseDigest,
-          codeMeasurement,
-          enclaveMeasurement: attestation,
-          match: true, // Must be true since verification succeeded
-        };
-      }
-      return attestation;
-    }
+    // Perform code attestation and runtime attestation in parallel
+    const [{ measurement: codeMeasurement }, attestation] = await Promise.all([
+      this.verifyCode(this.configRepo, releaseDigest),
+      this.verifyEnclave(this.serverURL),
+    ]);
+
+    // Compare measurements using platform-specific logic
+    const measurementsMatchError = compareMeasurementsError(codeMeasurement, attestation.measurement);
     
-    const verificationPromise = (async () => {
-      // Perform code attestation and runtime attestation in parallel via wrappers
-      const [{ measurement: codeMeasurement }, attestation] = await Promise.all([
-        this.verifyCode(this.configRepo, releaseDigest),
-        this.verifyEnclave(this.serverURL),
-      ]);
-
-      // Compare measurements using platform-specific logic
-      const measurementsMatchError = compareMeasurementsError(codeMeasurement, attestation.measurement);
-      
-      if (measurementsMatchError) {
-        throw new Error(
-          `Measurement verification failed: Code measurement (${codeMeasurement.type}) ` +
-          `does not match runtime measurement (${attestation.measurement.type}): ${measurementsMatchError.message}`
-        );
-      }
-      // Persist a full verification document for later retrieval by clients
-      this.lastVerificationDocument = {
-        configRepo: this.configRepo,
-        enclaveHost: this.serverURL,
-        releaseDigest: releaseDigest,
-        codeMeasurement,
-        enclaveMeasurement: attestation,
-        match: true,
-      };
-      return attestation;
-    })();
-
-    Verifier.verificationCache.set(cacheKey, verificationPromise);
-    verificationPromise.catch(() => {
-      Verifier.verificationCache.delete(cacheKey);
-    });
-
-    return verificationPromise;
+    if (measurementsMatchError) {
+      throw new Error(
+        `Measurement verification failed: Code measurement (${codeMeasurement.type}) ` +
+        `does not match runtime measurement (${attestation.measurement.type}): ${measurementsMatchError.message}`
+      );
+    }
+    // Persist a full verification document for later retrieval by clients
+    this.lastVerificationDocument = {
+      configRepo: this.configRepo,
+      enclaveHost: this.serverURL,
+      releaseDigest: releaseDigest,
+      codeMeasurement,
+      enclaveMeasurement: attestation,
+      match: true,
+    };
+    return attestation;
   }
 
   /**
