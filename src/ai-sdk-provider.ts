@@ -12,6 +12,8 @@ import { ReadableStream as NodeReadableStream } from "stream/web";
 interface CreateTinfoilAIOptions {
   /** Override the inference API base URL */
   baseURL?: string;
+  /** Override the URL used to fetch the HPKE (defaults to baseURL) */
+  hpkeKeyURL?: string;
   /** Override the config GitHub repository */
   configRepo?: string;
 }
@@ -25,8 +27,8 @@ interface CreateTinfoilAIOptions {
  */
 export async function createTinfoilAI(apiKey: string, options: CreateTinfoilAIOptions = {}) {
   const baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
+  const hpkeKeyURL = options.hpkeKeyURL || baseURL;
   const configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
-
   // step 1: verify the enclave and extract the public keys
   // from the attestation response
   const verifier = new Verifier({ serverURL: baseURL, configRepo });
@@ -39,7 +41,7 @@ export async function createTinfoilAI(apiKey: string, options: CreateTinfoilAIOp
   
   if (hpkePublicKey) {
     // HPKE available: use encrypted body fetch
-    fetchFunction = createEncryptedBodyFetch(baseURL, hpkePublicKey);
+    fetchFunction = createEncryptedBodyFetch(baseURL, hpkePublicKey, hpkeKeyURL);
   } else {
     // HPKE not available: check if we're in a browser
     if (isRealBrowser()) {

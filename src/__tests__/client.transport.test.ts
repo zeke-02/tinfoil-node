@@ -15,7 +15,7 @@ describe("Secure transport integration", () => {
     }));
     const mockFetch = t.mock.fn(async () => new Response(null));
     const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string) => mockFetch,
+      (_baseURL: string, _hpkePublicKey: string, _hpkeKeyURL?: string) => mockFetch,
     );
     const openAIConstructorMock = t.mock.fn(function (this: unknown, options: {
       fetch?: typeof fetch;
@@ -79,6 +79,7 @@ describe("Secure transport integration", () => {
         assert.deepStrictEqual(createEncryptedBodyFetchMock.mock.calls[0]?.arguments, [
           TINFOIL_CONFIG.INFERENCE_BASE_URL,
           "mock-hpke-public-key",
+          TINFOIL_CONFIG.HPKE_KEY_URL,
         ]);
         assert.strictEqual(openAIConstructorMock.mock.callCount(), 1);
         const options = openAIConstructorMock.mock.calls[0]?.arguments[0] as {
@@ -100,7 +101,7 @@ describe("Secure transport integration", () => {
     }));
     const mockFetch = t.mock.fn(async () => new Response(null));
     const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string) => mockFetch,
+      (_baseURL: string, _hpkePublicKey: string, _hpkeKeyURL?: string) => mockFetch,
     );
     const createOpenAICompatibleMock = t.mock.fn(
       (options: { fetch: typeof fetch }) => ({ __mockProvider: true }),
@@ -145,6 +146,7 @@ describe("Secure transport integration", () => {
         assert.deepStrictEqual(createEncryptedBodyFetchMock.mock.calls[0]?.arguments, [
           TINFOIL_CONFIG.INFERENCE_BASE_URL,
           "mock-hpke-public-key",
+          TINFOIL_CONFIG.HPKE_KEY_URL,
         ]);
         assert.strictEqual(createOpenAICompatibleMock.mock.callCount(), 1);
         const options = createOpenAICompatibleMock.mock.calls[0]?.arguments[0] as {
