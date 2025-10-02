@@ -77,16 +77,6 @@ export class VerifierWithState extends Verifier {
   // Subscribers
   private subscribers: Set<(state: VerificationState) => void> = new Set();
   
-  // Static cache for deduplicating verifications
-  private static runnerVerificationCache = new Map<string, Promise<VerificationResult>>();
-  
-  /**
-   * Clear the verification cache
-   */
-  public static clearVerificationCache(): void {
-    VerifierWithState.runnerVerificationCache.clear();
-  }
-
   /**
    * Subscribe to verification state updates
    * @param subscriber - Callback function to receive state updates
@@ -166,49 +156,19 @@ export class VerifierWithState extends Verifier {
       }
     }
     
-    // Now we have a digest, check cache
-    const cacheKey = `${configRepo}::${enclaveURL}::${releaseDigest}`;
-    const cachedPromise = VerifierWithState.runnerVerificationCache.get(cacheKey);
-    
-    if (cachedPromise) {
-      // Reuse cached promise, but publish state updates for this instance
-      if (options?.onUpdate) {
-        const unsubscribe = this.subscribe(options.onUpdate);
-        
-        // Get the cached result and update this instance's state to match
-        cachedPromise.then(cachedResult => {
-          // Update this instance's state to match the cached result
-          this.updateState(cachedResult);
-        }).finally(() => unsubscribe());
-      }
-      return cachedPromise;
-    }
-    
-    // No cached result, create new verification promise
-    const verificationPromise = this._runVerificationInternal(configRepo, enclaveURL, releaseDigest)
-      .then(result => {
-        // Successful verification stays in cache
-        return result;
-      })
-      .catch(error => {
-        // On error, evict from cache
-        VerifierWithState.runnerVerificationCache.delete(cacheKey);
-        throw error;
-      });
-    
-    // Store in cache
-    VerifierWithState.runnerVerificationCache.set(cacheKey, verificationPromise);
-    
-    // Handle updates if requested
+    const verificationPromise = this._runVerificationInternal(configRepo, enclaveURL, releaseDigest);
     if (options?.onUpdate) {
       const unsubscribe = this.subscribe(options.onUpdate);
       verificationPromise.finally(() => unsubscribe());
     }
-    
+
     return verificationPromise;
   }
   
-  private async _runVerificationInternal(configRepo: string, enclaveURL: string, releaseDigest: string): Promise<VerificationResult> {
+  private async _runVerificationInternal(
+    configRepo: string, 
+    enclaveURL: string, 
+    releaseDigest: string): Promise<VerificationResult> {
     try {
       // Reset state for this verification
       this.updateState({
@@ -302,10 +262,3 @@ export async function loadVerifier(): Promise<VerifierWithState> {
 
 // Re-export utilities
 export { suppressWasmLogs, TINFOIL_CONFIG };
-
-/**
- * Clear the verification cache
- */
-export function clearVerificationCache(): void {
-  VerifierWithState.clearVerificationCache();
-}
