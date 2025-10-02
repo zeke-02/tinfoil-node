@@ -12,12 +12,12 @@ interface SecureClientOptions {
 
 export class SecureClient {
   private initPromise: Promise<void> | null = null;
+  private verificationDocument: VerificationDocument | null = null;
   private _fetch: typeof fetch | null = null;
-  private configRepo?: string;
-  private verificationDocument?: VerificationDocument;
-
-  public baseURL?: string;
-  public hpkeKeyURL?: string;
+  
+  private readonly baseURL?: string;
+  private readonly hpkeKeyURL?: string;
+  private readonly configRepo?: string;
 
   constructor(options: SecureClientOptions = {}) {
     this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
@@ -39,10 +39,11 @@ export class SecureClient {
     });
 
     await verifier.verify();
-    this.verificationDocument = verifier.getVerificationDocument();
-    if (!this.verificationDocument) {
+    const doc = verifier.getVerificationDocument();
+    if (!doc) {
       throw new Error("Verification document not available after successful verification");
     }
+    this.verificationDocument = doc;
 
     const hpkePublicKey = this.verificationDocument.enclaveMeasurement.hpkePublicKey;
     if (!hpkePublicKey) {
@@ -59,7 +60,12 @@ export class SecureClient {
   }
 
   public async getVerificationDocument(): Promise<VerificationDocument> {
-    await this.ready();
+    if (!this.initPromise) {
+      await this.ready();
+    }
+    
+    await this.initPromise;
+    
     if (!this.verificationDocument) {
       throw new Error("Verification document unavailable: client not verified yet");
     }

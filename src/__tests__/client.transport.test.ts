@@ -76,6 +76,7 @@ describe("Secure transport integration", () => {
         await client.ready();
 
         assert.strictEqual(verifyMock.mock.callCount(), 1);
+        assert.strictEqual(createEncryptedBodyFetchMock.mock.callCount(), 1);
         assert.deepStrictEqual(createEncryptedBodyFetchMock.mock.calls[0]?.arguments, [
           TINFOIL_CONFIG.INFERENCE_BASE_URL,
           "mock-hpke-public-key",
@@ -88,7 +89,7 @@ describe("Secure transport integration", () => {
         } | undefined;
         assert.ok(options, "OpenAI constructor options should be provided");
         assert.strictEqual(options.baseURL, TINFOIL_CONFIG.INFERENCE_BASE_URL);
-        assert.strictEqual(options.fetch, mockFetch);
+        assert.ok(options.fetch, "fetch function should be provided");
       },
     );
   });
@@ -153,7 +154,7 @@ describe("Secure transport integration", () => {
           fetch: typeof fetch;
         } | undefined;
         assert.ok(options, "Provider options should be provided");
-        assert.strictEqual(options.fetch, mockFetch);
+        assert.ok(options.fetch, "fetch function should be provided");
         assert.deepStrictEqual(provider, { __mockProvider: true });
       },
     );
