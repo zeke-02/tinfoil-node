@@ -85,6 +85,8 @@ interface TinfoilAIOptions {
   apiKey?: string;
   /** Override the inference API base URL */
   baseURL?: string;
+  /** Override the URL used to fetch the HPKE key (defaults to baseURL) */
+  hpkeKeyURL?: string;
   /** Override the config GitHub repository */
   configRepo?: string;
   [key: string]: any; // Allow other OpenAI client options
@@ -100,6 +102,7 @@ export class TinfoilAI {
   // Expose properties for compatibility
   public apiKey?: string;
   public baseURL?: string;
+  public hpkeKeyURL?: string;
 
   /**
    * Creates a new TinfoilAI instance.
@@ -115,6 +118,7 @@ export class TinfoilAI {
     // Store properties for compatibility
     this.apiKey = openAIOptions.apiKey;
     this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
+    this.hpkeKeyURL = options.hpkeKeyURL || TINFOIL_CONFIG.HPKE_KEY_URL;
     this.configRepo =
       options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
@@ -168,7 +172,7 @@ export class TinfoilAI {
 
     if (hpkePublicKey) {
       // HPKE available: use encrypted body fetch
-      fetchFunction = createEncryptedBodyFetch(this.baseURL!, hpkePublicKey);
+      fetchFunction = createEncryptedBodyFetch(this.baseURL!, hpkePublicKey, this.hpkeKeyURL);
     } else {
       // HPKE not available: check if we're in a browser
       if (isRealBrowser()) {

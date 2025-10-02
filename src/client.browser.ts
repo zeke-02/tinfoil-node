@@ -44,6 +44,7 @@ function createAsyncProxy<T extends object>(promise: Promise<T>): T {
 interface TinfoilAIOptions {
   apiKey?: string;
   baseURL?: string;
+  hpkeKeyURL?: string;
   configRepo?: string;
   [key: string]: any;
 }
@@ -57,6 +58,7 @@ export class TinfoilAI {
 
   public apiKey?: string;
   public baseURL?: string;
+  public hpkeKeyURL?: string;
 
   constructor(options: TinfoilAIOptions = {}) {
     const openAIOptions = { ...options };
@@ -68,6 +70,7 @@ export class TinfoilAI {
 
     this.apiKey = openAIOptions.apiKey;
     this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
+    this.hpkeKeyURL = options.hpkeKeyURL || TINFOIL_CONFIG.HPKE_KEY_URL;
     this.configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
     this.clientPromise = this.initClient(openAIOptions);
@@ -120,7 +123,7 @@ export class TinfoilAI {
       throw new Error("HPKE public key is required in browser environments");
     }
 
-    const fetchFunction = createEncryptedBodyFetch(this.baseURL!, hpkePublicKey);
+    const fetchFunction = createEncryptedBodyFetch(this.baseURL!, hpkePublicKey, this.hpkeKeyURL);
 
     const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
       ...options,

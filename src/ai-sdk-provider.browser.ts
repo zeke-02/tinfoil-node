@@ -6,13 +6,14 @@ import { isRealBrowser } from "./env";
 
 interface CreateTinfoilAIOptions {
   baseURL?: string;
+  hpkeKeyURL?: string;
   configRepo?: string;
 }
 
 export async function createTinfoilAI(apiKey: string, options: CreateTinfoilAIOptions = {}) {
   const baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
+  const hpkeKeyURL = options.hpkeKeyURL || TINFOIL_CONFIG.HPKE_KEY_URL;
   const configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
-
   const verifier = new Verifier({ serverURL: baseURL, configRepo });
   const attestationResponse = await verifier.verify();
   const hpkePublicKey = attestationResponse.hpkePublicKey;
@@ -27,7 +28,7 @@ export async function createTinfoilAI(apiKey: string, options: CreateTinfoilAIOp
     throw new Error("HPKE public key is required in browser environments");
   }
 
-  const fetchFunction = createEncryptedBodyFetch(baseURL, hpkePublicKey);
+  const fetchFunction = createEncryptedBodyFetch(baseURL, hpkePublicKey, hpkeKeyURL);
 
   return createOpenAICompatible({
     name: "tinfoil",

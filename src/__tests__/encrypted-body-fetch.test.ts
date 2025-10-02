@@ -179,4 +179,82 @@ describe("encrypted body fetch helper", () => {
     assert.strictEqual(identityGenerate.mock.callCount(), 2);
     assert.strictEqual(transportRequest.mock.callCount(), 1);
   });
+
+  it("uses HPKE key origin for discovery but routes to request origin", async (t: TestContext) => {
+    const REQUEST_ORIGIN = "https://api.example";
+    const KEY_ORIGIN = "https://keys.example";
+    const REQUEST_BASE = `${REQUEST_ORIGIN}/v1/`;
+    const KEY_BASE = `${KEY_ORIGIN}/v1/`;
+
+    const transportRequest = t.mock.fn(
+      async (url: string, _init?: RequestInit) => new Response(null),
+    );
+
+    const constructed: Array<{ host: string; hex: string }> = [];
+
+    // This represents the server public key object; the Transport stub will read __mockHex off it
+    const PUBLIC_KEY_OBJ = { __mockHex: MOCK_HPKE_PUBLIC_KEY } as any;
+
+    // createTransport for key origin returns a transport that exposes getServerPublicKey()
+    const createTransport = t.mock.fn(async (serverURL: string, _id: any) => {
+      if (!serverURL.startsWith(KEY_ORIGIN)) {
+        throw new Error("createTransport should be called with key origin");
+      }
+      return {
+        request: t.mock.fn(async () => new Response(null)), // should not be used for actual request
+        getServerPublicKey: () => PUBLIC_KEY_OBJ,
+      };
+    });
+
+    // Identity.generate is required by our helper
+    const identityGenerate = t.mock.fn(async () => ({ __mockIdentity: true }));
+
+    // Stub Transport class used by composite path; it routes to request host
+    class TransportStub {
+      private host: string;
+      private key: any;
+      constructor(_id: any, serverHost: string, serverPublicKey: any) {
+        this.host = serverHost;
+        this.key = serverPublicKey;
+        constructed.push({ host: serverHost, hex: serverPublicKey.__mockHex });
+      }
+      async getServerPublicKeyHex(): Promise<string> {
+        return this.key.__mockHex;
+      }
+      async request(url: string, init?: RequestInit): Promise<Response> {
+        // Ensure the request goes to the request origin host
+        const u = new URL(url);
+        if (u.origin !== REQUEST_ORIGIN) {
+          throw new Error(`request was sent to wrong origin: ${u.origin}`);
+        }
+        return transportRequest(url, init);
+      }
+    }
+
+    await withEhbpModuleMock(
+      {
+        Identity: { generate: identityGenerate } as any,
+        createTransport: createTransport as any,
+        Transport: TransportStub as any,
+        PROTOCOL: {} as any,
+        HPKE_CONFIG: {} as any,
+      },
+      async () => {
+        const secureFetch = createEncryptedBodyFetch(
+          `${REQUEST_BASE}`,
+          MOCK_HPKE_PUBLIC_KEY,
+          `${KEY_BASE}`,
+        );
+        await secureFetch("models");
+      },
+    );
+
+    // Verify we built a Transport for the request origin using the key from key origin
+    assert.strictEqual(constructed.length, 1);
+    assert.strictEqual(constructed[0]?.host, new URL(REQUEST_BASE).host);
+    assert.strictEqual(constructed[0]?.hex, MOCK_HPKE_PUBLIC_KEY);
+    assert.strictEqual(transportRequest.mock.callCount(), 1);
+    // createTransport should be called once for key origin
+    assert.ok(createTransport.mock.callCount() >= 1);
+  });
 });
