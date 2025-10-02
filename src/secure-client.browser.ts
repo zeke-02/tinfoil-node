@@ -4,101 +4,48 @@ import { TINFOIL_CONFIG } from "./config";
 import { createEncryptedBodyFetch } from "./encrypted-body-fetch";
 import { isRealBrowser } from "./env";
 
-function createAsyncProxy<T extends object>(promise: Promise<T>): T {
-  return new Proxy({} as T, {
-    get(target, prop) {
-      return new Proxy(() => {}, {
-        get(_, nestedProp) {
-          return (...args: any[]) =>
-            promise.then((obj) => {
-              const value = (obj as any)[prop][nestedProp];
-              return typeof value === "function"
-                ? value.apply((obj as any)[prop], args)
-                : value;
-            });
-        },
-        apply(_, __, args) {
-          return promise.then((obj) => {
-            const value = (obj as any)[prop];
-            return typeof value === "function" ? value.apply(obj, args) : value;
-          });
-        },
-      });
-    },
-  });
-}
-
 interface SecureClientOptions {
-  apiKey?: string;
   baseURL?: string;
   hpkeKeyURL?: string;
   configRepo?: string;
-  [key: string]: any;
 }
 
 export class SecureClient {
-  private readyPromise?: Promise<void>;
+  private initPromise: Promise<void> | null = null;
+  private _fetch: typeof fetch | null = null;
   private configRepo?: string;
   private verificationDocument?: VerificationDocument;
 
-  public apiKey?: string;
   public baseURL?: string;
   public hpkeKeyURL?: string;
 
   constructor(options: SecureClientOptions = {}) {
-    const secureClientOptions = { ...options };
-    // In browser builds, never read secrets from process.env to avoid
-    // leaking credentials into client bundles. Require explicit apiKey.
-    if (typeof options.apiKey === "string") {
-      secureClientOptions.apiKey = options.apiKey;
-    }
-
-    this.apiKey = secureClientOptions.apiKey;
     this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
     this.hpkeKeyURL = options.hpkeKeyURL || TINFOIL_CONFIG.HPKE_KEY_URL;
     this.configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
-
-    this.clientPromise = this.initClient(secureClientOptions);
   }
 
   public async ready(): Promise<void> {
-    if (!this.readyPromise) {
-      this.readyPromise = (async () => {
-        this.client = await this.clientPromise;
-      })();
+    if (!this.initPromise) {
+      this.initPromise = this.initSecureClient();
     }
-    return this.readyPromise;
+    return this.initPromise;
   }
 
-  private async initClient(
-    options?: Partial<Omit<ConstructorParameters<typeof OpenAI>[0], "baseURL">>,
-  ): Promise<OpenAI> {
-    return this.createSecureClient(options);
-  }
-
-  private async createSecureClient(
-    options: Partial<
-      Omit<ConstructorParameters<typeof OpenAI>[0], "baseURL">
-    > = {},
-  ): Promise<OpenAI> {
+  private async initSecureClient(): Promise<void> {
     const verifier = new Verifier({
       serverURL: this.baseURL,
       configRepo: this.configRepo,
     });
 
-    try {
-      await verifier.verify();
-      this.verificationDocument = verifier.getVerificationDocument();
-      if (!this.verificationDocument) {
-        throw new Error("Verification document not available after successful verification");
-      }
-    } catch (error) {
-      throw new Error(`Failed to verify enclave: ${error}`);
+    await verifier.verify();
+    this.verificationDocument = verifier.getVerificationDocument();
+    if (!this.verificationDocument) {
+      throw new Error("Verification document not available after successful verification");
     }
 
     const hpkePublicKey = this.verificationDocument.enclaveMeasurement.hpkePublicKey;
     if (!hpkePublicKey) {
-      // In browsers we require HPKE; TLS pinning fallback is Node-only
       if (isRealBrowser()) {
         throw new Error(
           "HPKE public key not available and TLS-only verification is not supported in browsers. " +
@@ -108,23 +55,7 @@ export class SecureClient {
       throw new Error("HPKE public key is required in browser environments");
     }
 
-    const fetchFunction = createEncryptedBodyFetch(this.baseURL!, hpkePublicKey, this.hpkeKeyURL);
-
-    const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
-      ...options,
-      baseURL: this.baseURL,
-      fetch: fetchFunction,
-    };
-
-    // In browser usage, OpenAI SDK typically needs dangerouslyAllowBrowser
-    clientOptions.dangerouslyAllowBrowser = true;
-
-    return new OpenAI(clientOptions);
-  }
-
-  private async ensureReady(): Promise<OpenAI> {
-    await this.ready();
-    return this.client!;
+    this._fetch = createEncryptedBodyFetch(this.baseURL!, hpkePublicKey, this.hpkeKeyURL);
   }
 
   public async getVerificationDocument(): Promise<VerificationDocument> {
@@ -135,59 +66,10 @@ export class SecureClient {
     return this.verificationDocument;
   }
 
-  get chat(): Chat {
-    return createAsyncProxy(this.ensureReady().then((client) => client.chat));
+  get fetch(): typeof fetch {
+    return async (input: RequestInfo | URL, init?: RequestInit) => {
+      await this.ready();
+      return this._fetch!(input, init);
+    };
   }
-  get files(): Files {
-    return createAsyncProxy(this.ensureReady().then((client) => client.files));
-  }
-  get fineTuning(): FineTuning {
-    return createAsyncProxy(
-      this.ensureReady().then((client) => client.fineTuning),
-    );
-  }
-  get images(): Images {
-    return createAsyncProxy(this.ensureReady().then((client) => client.images));
-  }
-  get audio(): Audio {
-    return createAsyncProxy(this.ensureReady().then((client) => client.audio));
-  }
-  get responses(): Responses {
-    return createAsyncProxy(
-      this.ensureReady().then((client) => client.responses),
-    );
-  }
-  get embeddings(): Embeddings {
-    return createAsyncProxy(
-      this.ensureReady().then((client) => client.embeddings),
-    );
-  }
-  get models(): Models {
-    return createAsyncProxy(this.ensureReady().then((client) => client.models));
-  }
-  get moderations(): Moderations {
-    return createAsyncProxy(
-      this.ensureReady().then((client) => client.moderations),
-    );
-  }
-  get beta(): Beta {
-    return createAsyncProxy(this.ensureReady().then((client) => client.beta));
-  }
-}
-
-export namespace TinfoilAI {
-  export import Chat = OpenAI.Chat;
-  export import Audio = OpenAI.Audio;
-  export import Beta = OpenAI.Beta;
-  export import Batches = OpenAI.Batches;
-  export import Completions = OpenAI.Completions;
-  export import Embeddings = OpenAI.Embeddings;
-  export import Files = OpenAI.Files;
-  export import FineTuning = OpenAI.FineTuning;
-  export import Images = OpenAI.Images;
-  export import Models = OpenAI.Models;
-  export import Moderations = OpenAI.Moderations;
-  export import Responses = OpenAI.Responses;
-  export import Uploads = OpenAI.Uploads;
-  export import VectorStores = OpenAI.VectorStores;
 }
