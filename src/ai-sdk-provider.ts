@@ -27,7 +27,7 @@ interface CreateTinfoilAIOptions {
  */
 export async function createTinfoilAI(apiKey: string, options: CreateTinfoilAIOptions = {}) {
   const baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
-  const hpkeKeyURL = options.hpkeKeyURL || baseURL;
+  const hpkeKeyURL = options.hpkeKeyURL || TINFOIL_CONFIG.HPKE_KEY_URL;
   const configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
   // step 1: verify the enclave and extract the public keys
   // from the attestation response

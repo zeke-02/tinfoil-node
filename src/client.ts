@@ -118,7 +118,7 @@ export class TinfoilAI {
     // Store properties for compatibility
     this.apiKey = openAIOptions.apiKey;
     this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
-    this.hpkeKeyURL = options.hpkeKeyURL || this.baseURL;
+    this.hpkeKeyURL = options.hpkeKeyURL || TINFOIL_CONFIG.HPKE_KEY_URL;
     this.configRepo =
       options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
