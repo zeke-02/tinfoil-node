@@ -19,7 +19,6 @@
     },
     "./client": {
       "types": "./dist/client.d.ts",
-      "browser": "./dist/esm/client.browser.js",
       "import": "./dist/esm/client.js",
       "require": "./dist/client.js"
     },
