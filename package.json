@@ -54,7 +54,7 @@
     "build": "npm run build:cjs && npm run build:esm",
     "build:cjs": "tsc && cp src/wasm-exec.js dist/",
     "build:esm": "tsc -p tsconfig.esm.json && cp src/wasm-exec.js dist/esm/",
-    "test": "bash -lc 'rm -rf .node-tests && tsc -p tsconfig.node-test.json && cp src/wasm-exec.js .node-tests/ && node --test $(find .node-tests -name \"*.test.js\" -print)'",
+    "test": "bash -lc 'rm -rf dist .node-tests && npm run build:cjs && tsc -p tsconfig.node-test.json && cp src/wasm-exec.js .node-tests/ && node --test $(find .node-tests -name \"*.test.js\" -print)'",
     "lint": "eslint src/**/*.ts",
     "prepublishOnly": "npm run build"
   },

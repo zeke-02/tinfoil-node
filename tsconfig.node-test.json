@@ -3,7 +3,6 @@
   "compilerOptions": {
     "module": "commonjs",
     "moduleResolution": "node",
-    "baseUrl": ".",
     "paths": {
       "tinfoil": ["./src/index.ts"],
       "tinfoil/*": ["./src/*"]
