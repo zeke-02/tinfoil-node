@@ -6,7 +6,7 @@ import { isRealBrowser } from "./env";
 
 interface SecureClientOptions {
   baseURL?: string;
-  hpkeKeyURL?: string;
+  enclaveURL?: string;
   configRepo?: string;
 }
 
@@ -16,12 +16,12 @@ export class SecureClient {
   private _fetch: typeof fetch | null = null;
   
   private readonly baseURL?: string;
-  private readonly hpkeKeyURL?: string;
+  private readonly enclaveURL?: string;
   private readonly configRepo?: string;
 
   constructor(options: SecureClientOptions = {}) {
     this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
-    this.hpkeKeyURL = options.hpkeKeyURL || TINFOIL_CONFIG.HPKE_KEY_URL;
+    this.enclaveURL = options.enclaveURL || TINFOIL_CONFIG.ENCLAVE_URL;
     this.configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
   }
 
@@ -34,7 +34,7 @@ export class SecureClient {
 
   private async initSecureClient(): Promise<void> {
     const verifier = new Verifier({
-      serverURL: this.hpkeKeyURL,
+      serverURL: this.enclaveURL,
       configRepo: this.configRepo,
     });
 
@@ -56,7 +56,7 @@ export class SecureClient {
       throw new Error("HPKE public key is required in browser environments");
     }
 
-    this._fetch = createEncryptedBodyFetch(this.baseURL!, hpkePublicKey, this.hpkeKeyURL);
+    this._fetch = createEncryptedBodyFetch(this.baseURL!, hpkePublicKey, this.enclaveURL);
   }
 
   public async getVerificationDocument(): Promise<VerificationDocument> {

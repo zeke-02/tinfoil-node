@@ -27,7 +27,7 @@ describe("TinfoilAI - inference.tinfoil.sh integration", () => {
     const client = new TinfoilAI({
       apiKey: API_KEY,
       baseURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-      hpkeKeyURL: "https://ehbp.inf6.tinfoil.sh/v1/",
+      enclaveURL: "https://ehbp.inf6.tinfoil.sh/v1/",
       configRepo: "tinfoilsh/confidential-inference-proxy-hpke",
     });
 

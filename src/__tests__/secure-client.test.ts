@@ -14,7 +14,7 @@ describe("SecureClient", () => {
     
     const mockFetch = t.mock.fn(async () => new Response(JSON.stringify({ message: "success" })));
     const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string, _hpkeKeyURL?: string) => mockFetch,
+      (_baseURL: string, _hpkePublicKey: string, _enclaveURL?: string) => mockFetch,
     );
 
     await withMockedModules(
@@ -47,7 +47,7 @@ describe("SecureClient", () => {
         
         const client = new SecureClient({
           baseURL: "https://test.example.com/",
-          hpkeKeyURL: "https://keys.test.example.com/",
+          enclaveURL: "https://keys.test.example.com/",
           configRepo: "test-org/test-repo",
         });
 
@@ -74,7 +74,7 @@ describe("SecureClient", () => {
     const mockResponseBody = { test: "response" };
     const mockFetch = t.mock.fn(async () => new Response(JSON.stringify(mockResponseBody)));
     const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string, _hpkeKeyURL?: string) => mockFetch,
+      (_baseURL: string, _hpkePublicKey: string, _enclaveURL?: string) => mockFetch,
     );
 
     await withMockedModules(
@@ -145,7 +145,7 @@ describe("SecureClient", () => {
     
     const mockFetch = t.mock.fn(async () => new Response(null));
     const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string, _hpkeKeyURL?: string) => mockFetch,
+      (_baseURL: string, _hpkePublicKey: string, _enclaveURL?: string) => mockFetch,
     );
 
     await withMockedModules(
@@ -187,7 +187,7 @@ describe("SecureClient", () => {
     
     const mockFetch = t.mock.fn(async () => new Response(null));
     const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string, _hpkeKeyURL?: string) => mockFetch,
+      (_baseURL: string, _hpkePublicKey: string, _enclaveURL?: string) => mockFetch,
     );
 
     await withMockedModules(
