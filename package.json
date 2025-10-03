@@ -1,6 +1,6 @@
 {
   "name": "tinfoil",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "Tinfoil secure OpenAI client wrapper",
   "main": "dist/index.js",
   "module": "dist/esm/index.js",
