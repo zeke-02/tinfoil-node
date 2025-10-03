@@ -11,11 +11,9 @@ import type {
   Moderations,
   Responses,
 } from "openai/resources";
-import { Verifier } from "./verifier";
+import { SecureClient } from "./secure-client.browser";
 import type { VerificationDocument } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
-import { createEncryptedBodyFetch } from "./encrypted-body-fetch";
-import { isRealBrowser } from "./env";
 
 function createAsyncProxy<T extends object>(promise: Promise<T>): T {
   return new Proxy({} as T, {
@@ -54,6 +52,7 @@ export class TinfoilAI {
   private clientPromise: Promise<OpenAI>;
   private readyPromise?: Promise<void>;
   private configRepo?: string;
+  private secureClient: SecureClient;
   private verificationDocument?: VerificationDocument;
 
   public apiKey?: string;
@@ -72,6 +71,13 @@ export class TinfoilAI {
     this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
     this.hpkeKeyURL = options.hpkeKeyURL || TINFOIL_CONFIG.HPKE_KEY_URL;
     this.configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
+
+    // Create the secure client for handling transport security
+    this.secureClient = new SecureClient({
+      baseURL: this.baseURL,
+      hpkeKeyURL: this.hpkeKeyURL,
+      configRepo: this.configRepo,
+    });
 
     this.clientPromise = this.initClient(openAIOptions);
   }
@@ -96,39 +102,17 @@ export class TinfoilAI {
       Omit<ConstructorParameters<typeof OpenAI>[0], "baseURL">
     > = {},
   ): Promise<OpenAI> {
-    const verifier = new Verifier({
-      serverURL: this.baseURL,
-      configRepo: this.configRepo,
-    });
-
-    try {
-      await verifier.verify();
-      this.verificationDocument = verifier.getVerificationDocument();
-      if (!this.verificationDocument) {
-        throw new Error("Verification document not available after successful verification");
-      }
-    } catch (error) {
-      throw new Error(`Failed to verify enclave: ${error}`);
+    await this.secureClient.ready();
+    
+    this.verificationDocument = await this.secureClient.getVerificationDocument();
+    if (!this.verificationDocument) {
+      throw new Error("Verification document not available after successful verification");
     }
-
-    const hpkePublicKey = this.verificationDocument.enclaveMeasurement.hpkePublicKey;
-    if (!hpkePublicKey) {
-      // In browsers we require HPKE; TLS pinning fallback is Node-only
-      if (isRealBrowser()) {
-        throw new Error(
-          "HPKE public key not available and TLS-only verification is not supported in browsers. " +
-          "Only HPKE-enabled enclaves can be used in browser environments."
-        );
-      }
-      throw new Error("HPKE public key is required in browser environments");
-    }
-
-    const fetchFunction = createEncryptedBodyFetch(this.baseURL!, hpkePublicKey, this.hpkeKeyURL);
 
     const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
       ...options,
       baseURL: this.baseURL,
-      fetch: fetchFunction,
+      fetch: this.secureClient.fetch,
     };
 
     // In browser usage, OpenAI SDK typically needs dangerouslyAllowBrowser

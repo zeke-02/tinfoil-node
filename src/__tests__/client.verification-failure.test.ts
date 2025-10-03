@@ -32,7 +32,7 @@ describe("Client verification gating", () => {
         const { TinfoilAI } = await import("../client");
         const client = new TinfoilAI({ apiKey: "test" });
 
-        await assert.rejects(() => client.ready(), /Failed to verify enclave/);
+        await assert.rejects(() => client.ready(), /verify/);
 
         await assert.rejects(
           () =>
@@ -40,7 +40,7 @@ describe("Client verification gating", () => {
               model: "llama-free",
               messages: [{ role: "user", content: "hi" }],
             } as any),
-          /Failed to verify enclave/,
+          /verify/,
         );
 
         assert.strictEqual(
@@ -52,4 +52,3 @@ describe("Client verification gating", () => {
     );
   });
 });
-

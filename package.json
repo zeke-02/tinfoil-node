@@ -25,7 +25,6 @@
     },
     "./ai-sdk-provider": {
       "types": "./dist/ai-sdk-provider.d.ts",
-      "browser": "./dist/esm/ai-sdk-provider.browser.js",
       "import": "./dist/esm/ai-sdk-provider.js",
       "require": "./dist/ai-sdk-provider.js"
     },
@@ -43,6 +42,12 @@
       "types": "./dist/config.d.ts",
       "import": "./dist/esm/config.js",
       "require": "./dist/config.js"
+    },
+    "./secure-client": {
+      "types": "./dist/secure-client.d.ts",
+      "browser": "./dist/esm/secure-client.browser.js",
+      "import": "./dist/esm/secure-client.js",
+      "require": "./dist/secure-client.js"
     }
   },
   "scripts": {
