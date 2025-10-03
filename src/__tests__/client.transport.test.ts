@@ -95,44 +95,42 @@ describe("Secure transport integration", () => {
   });
 
   it("provides the encrypted body transport to the AI SDK provider", async (t: TestContext) => {
-    const verifyMock = t.mock.fn(async () => ({
-      tlsPublicKeyFingerprint: "fingerprint",
-      hpkePublicKey: "mock-hpke-public-key",
-      measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
-    }));
     const mockFetch = t.mock.fn(async () => new Response(null));
-    const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string, _hpkeKeyURL?: string) => mockFetch,
-    );
+    const mockVerificationDocument = {
+      configRepo: "test-repo",
+      enclaveHost: "test-host",
+      digest: "test-digest",
+      codeMeasurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
+      enclaveMeasurement: {
+        tlsPublicKeyFingerprint: "fingerprint",
+        hpkePublicKey: "mock-hpke-public-key",
+        measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
+      },
+      match: true,
+    };
+    
     const createOpenAICompatibleMock = t.mock.fn(
       (options: { fetch: typeof fetch }) => ({ __mockProvider: true }),
     );
 
     await withMockedModules(
       {
-        "./verifier": {
-          Verifier: class {
-            verify() {
-              return verifyMock();
+        "./secure-client": {
+          SecureClient: class {
+            constructor() {}
+            
+            async ready() {
+              // Mock ready method
             }
-            getVerificationDocument() {
-              return {
-                configRepo: "test-repo",
-                enclaveHost: "test-host",
-                digest: "test-digest",
-                codeMeasurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
-                enclaveMeasurement: {
-                  tlsPublicKeyFingerprint: "fingerprint",
-                  hpkePublicKey: "mock-hpke-public-key",
-                  measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
-                },
-                match: true,
-              };
+            
+            async getVerificationDocument() {
+              return mockVerificationDocument;
+            }
+            
+            get fetch() {
+              return mockFetch;
             }
           },
-        },
-        "./encrypted-body-fetch": {
-          createEncryptedBodyFetch: createEncryptedBodyFetchMock,
         },
         "@ai-sdk/openai-compatible": {
           createOpenAICompatible: createOpenAICompatibleMock,
@@ -143,12 +141,6 @@ describe("Secure transport integration", () => {
         const { createTinfoilAI } = await import("../ai-sdk-provider");
         const provider = await createTinfoilAI("api-key");
 
-        assert.strictEqual(verifyMock.mock.callCount(), 1);
-        assert.deepStrictEqual(createEncryptedBodyFetchMock.mock.calls[0]?.arguments, [
-          TINFOIL_CONFIG.INFERENCE_BASE_URL,
-          "mock-hpke-public-key",
-          TINFOIL_CONFIG.HPKE_KEY_URL,
-        ]);
         assert.strictEqual(createOpenAICompatibleMock.mock.callCount(), 1);
         const options = createOpenAICompatibleMock.mock.calls[0]?.arguments[0] as {
           fetch: typeof fetch;
