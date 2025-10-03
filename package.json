@@ -44,6 +44,7 @@
       "require": "./dist/config.js"
     },
     "./secure-client": {
+      "development": "./.node-tests/secure-client.js",
       "types": "./dist/secure-client.d.ts",
       "browser": "./dist/esm/secure-client.browser.js",
       "import": "./dist/esm/secure-client.js",
