@@ -35,7 +35,7 @@ export class SecureClient {
 
   private async initSecureClient(): Promise<void> {
     const verifier = new Verifier({
-      serverURL: this.baseURL,
+      serverURL: this.hpkeKeyURL,
       configRepo: this.configRepo,
     });
 
