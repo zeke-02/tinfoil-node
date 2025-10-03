@@ -565,8 +565,8 @@ export class Verifier {
     
     if (measurementsMatchError) {
       throw new Error(
-        `Measurement verification failed: Code measurement (${codeMeasurement.type}) ` +
-        `does not match runtime measurement (${attestation.measurement.type}): ${measurementsMatchError.message}`
+        `Verification failed: measurements did not match.\nCode measurement (${codeMeasurement.type}: ${codeMeasurement.registers})\n` +
+        `Runtime measurement (${attestation.measurement.type}: ${attestation.measurement.registers}:)\n ${measurementsMatchError.message}`
       );
     }
     // Persist a full verification document for later retrieval by clients

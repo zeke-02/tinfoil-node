@@ -64,7 +64,7 @@ describe("Verifier verify() failure when code attestation mismatches", () => {
 
           await assert.rejects(
             () => verifier.verify(),
-            /Measurement verification failed/,
+            /Verification failed: measurements did not match/,
           );
         },
       );

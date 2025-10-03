@@ -11,7 +11,7 @@ import type {
   Moderations,
   Responses,
 } from "openai/resources";
-import { SecureClient } from "./secure-client";
+import { SecureClient } from "tinfoil/secure-client";
 import type { VerificationDocument } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
 import { isRealBrowser } from "./env";
@@ -73,8 +73,8 @@ interface TinfoilAIOptions {
   apiKey?: string;
   /** Override the inference API base URL */
   baseURL?: string;
-  /** Override the URL used to fetch the HPKE key (defaults to baseURL) */
-  hpkeKeyURL?: string;
+  /** Override the URL used to fetch the ENCLAVE key (defaults to baseURL) */
+  enclaveURL?: string;
   /** Override the config GitHub repository */
   configRepo?: string;
   [key: string]: any; // Allow other OpenAI client options
@@ -91,7 +91,7 @@ export class TinfoilAI {
   // Expose properties for compatibility
   public apiKey?: string;
   public baseURL?: string;
-  public hpkeKeyURL?: string;
+  public enclaveURL?: string;
 
   /**
    * Creates a new TinfoilAI instance.
@@ -107,12 +107,12 @@ export class TinfoilAI {
     // Store properties for compatibility
     this.apiKey = openAIOptions.apiKey;
     this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
-    this.hpkeKeyURL = options.hpkeKeyURL || TINFOIL_CONFIG.HPKE_KEY_URL;
+    this.enclaveURL = options.enclaveURL || TINFOIL_CONFIG.ENCLAVE_URL;
     this.configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
     this.secureClient = new SecureClient({
       baseURL: this.baseURL,
-      hpkeKeyURL: this.hpkeKeyURL,
+      enclaveURL: this.enclaveURL,
       configRepo: this.configRepo,
     });
 

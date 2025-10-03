@@ -11,7 +11,7 @@ import type {
   Moderations,
   Responses,
 } from "openai/resources";
-import { SecureClient } from "./secure-client.browser";
+import { SecureClient } from "tinfoil/secure-client";
 import type { VerificationDocument } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
 
@@ -42,7 +42,7 @@ function createAsyncProxy<T extends object>(promise: Promise<T>): T {
 interface TinfoilAIOptions {
   apiKey?: string;
   baseURL?: string;
-  hpkeKeyURL?: string;
+  enclaveURL?: string;
   configRepo?: string;
   [key: string]: any;
 }
@@ -57,7 +57,7 @@ export class TinfoilAI {
 
   public apiKey?: string;
   public baseURL?: string;
-  public hpkeKeyURL?: string;
+  public enclaveURL?: string;
 
   constructor(options: TinfoilAIOptions = {}) {
     const openAIOptions = { ...options };
@@ -69,13 +69,13 @@ export class TinfoilAI {
 
     this.apiKey = openAIOptions.apiKey;
     this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
-    this.hpkeKeyURL = options.hpkeKeyURL || TINFOIL_CONFIG.HPKE_KEY_URL;
+    this.enclaveURL = options.enclaveURL || TINFOIL_CONFIG.ENCLAVE_URL;
     this.configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
     // Create the secure client for handling transport security
     this.secureClient = new SecureClient({
       baseURL: this.baseURL,
-      hpkeKeyURL: this.hpkeKeyURL,
+      enclaveURL: this.enclaveURL,
       configRepo: this.configRepo,
     });
 

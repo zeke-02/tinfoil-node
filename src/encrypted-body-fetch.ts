@@ -41,7 +41,7 @@ export async function encryptedBodyRequest(
   input: RequestInfo | URL,
   hpkePublicKey: string,
   init?: RequestInit,
-  hpkeKeyURL?: string,
+  enclaveURL?: string,
 ): Promise<Response> {
   const { url: requestUrl, init: requestInit } = normalizeEncryptedBodyRequestArgs(
     input,
@@ -52,7 +52,7 @@ export async function encryptedBodyRequest(
   const { origin } = u;
 
   // Determine which origin to fetch the HPKE key from (may be different from request origin)
-  const keyOrigin = hpkeKeyURL ? new URL(hpkeKeyURL).origin : origin;
+  const keyOrigin = enclaveURL ? new URL(enclaveURL).origin : origin;
 
   // If key origin matches request origin, use the standard transport (fetches keys from origin)
   // Otherwise, build a composite transport that routes to `origin` but uses the key fetched from `keyOrigin`.
@@ -78,12 +78,12 @@ export async function encryptedBodyRequest(
   return transport.request(requestUrl, requestInit);
 }
 
-export function createEncryptedBodyFetch(baseURL: string, hpkePublicKey: string, hpkeKeyURL?: string): typeof fetch {
+export function createEncryptedBodyFetch(baseURL: string, hpkePublicKey: string, enclaveURL?: string): typeof fetch {
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const normalized = normalizeEncryptedBodyRequestArgs(input, init);
     const targetUrl = new URL(normalized.url, baseURL);
 
-    return encryptedBodyRequest(targetUrl.toString(), hpkePublicKey, normalized.init, hpkeKeyURL);
+    return encryptedBodyRequest(targetUrl.toString(), hpkePublicKey, normalized.init, enclaveURL);
   }) as typeof fetch;
 }
 

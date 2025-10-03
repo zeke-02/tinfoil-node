@@ -5,7 +5,7 @@ import { withMockedModules } from "./test-utils";
 
 describe("Client verification gating", () => {
   it("blocks client creation and requests when verification fails", async (t: TestContext) => {
-    const createEncryptedBodyFetch = t.mock.fn((_baseURL: string, _hpkeKey: string, _hpkeKeyURL?: string) => {
+    const createEncryptedBodyFetch = t.mock.fn((_baseURL: string, _hpkeKey: string, _enclaveURL?: string) => {
       return (async () => new Response(null)) as typeof fetch;
     });
 

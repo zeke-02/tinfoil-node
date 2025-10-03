@@ -14,7 +14,7 @@ describe("SecureClient (browser)", () => {
     
     const mockFetch = t.mock.fn(async () => new Response(JSON.stringify({ message: "success" })));
     const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string, _hpkeKeyURL?: string) => mockFetch,
+      (_baseURL: string, _hpkePublicKey: string, _enclaveURL?: string) => mockFetch,
     );
 
     await withMockedModules(
@@ -48,7 +48,7 @@ describe("SecureClient (browser)", () => {
         
         const client = new SecureClient({
           baseURL: "https://test.example.com/",
-          hpkeKeyURL: "https://keys.test.example.com/",
+          enclaveURL: "https://keys.test.example.com/",
           configRepo: "test-org/test-repo",
         });
 
@@ -126,7 +126,7 @@ describe("SecureClient (browser)", () => {
     const mockResponseBody = { test: "browser response" };
     const mockFetch = t.mock.fn(async () => new Response(JSON.stringify(mockResponseBody)));
     const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string, _hpkeKeyURL?: string) => mockFetch,
+      (_baseURL: string, _hpkePublicKey: string, _enclaveURL?: string) => mockFetch,
     );
 
     await withMockedModules(
