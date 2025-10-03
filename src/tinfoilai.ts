@@ -14,6 +14,7 @@ import type {
 import { SecureClient } from "tinfoil/secure-client";
 import type { VerificationDocument } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
+import { isRealBrowser } from "./env";
 
 function createAsyncProxy<T extends object>(promise: Promise<T>): T {
   return new Proxy({} as T, {
@@ -44,7 +45,7 @@ interface TinfoilAIOptions {
   baseURL?: string;
   enclaveURL?: string;
   configRepo?: string;
-  [key: string]: any;
+  [key: string]: any; // Allow other OpenAI client options
 }
 
 export class TinfoilAI {
@@ -63,8 +64,11 @@ export class TinfoilAI {
     const openAIOptions = { ...options };
     // In browser builds, never read secrets from process.env to avoid
     // leaking credentials into client bundles. Require explicit apiKey.
-    if (typeof options.apiKey === "string") {
+    if(options.apiKey) {
       openAIOptions.apiKey = options.apiKey;
+    }
+    else if(!isRealBrowser() && process.env.TINFOIL_API_KEY) {
+      openAIOptions.apiKey = process.env.TINFOIL_API_KEY 
     }
 
     this.apiKey = openAIOptions.apiKey;
@@ -72,7 +76,6 @@ export class TinfoilAI {
     this.enclaveURL = options.enclaveURL || TINFOIL_CONFIG.ENCLAVE_URL;
     this.configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
 
-    // Create the secure client for handling transport security
     this.secureClient = new SecureClient({
       baseURL: this.baseURL,
       enclaveURL: this.enclaveURL,
@@ -115,8 +118,9 @@ export class TinfoilAI {
       fetch: this.secureClient.fetch,
     };
 
-    // In browser usage, OpenAI SDK typically needs dangerouslyAllowBrowser
-    clientOptions.dangerouslyAllowBrowser = true;
+    if (isRealBrowser() || (options as any).dangerouslyAllowBrowser === true) {
+      clientOptions.dangerouslyAllowBrowser = true;
+    }
 
     return new OpenAI(clientOptions);
   }
@@ -137,43 +141,53 @@ export class TinfoilAI {
   get chat(): Chat {
     return createAsyncProxy(this.ensureReady().then((client) => client.chat));
   }
+
   get files(): Files {
     return createAsyncProxy(this.ensureReady().then((client) => client.files));
   }
+
   get fineTuning(): FineTuning {
     return createAsyncProxy(
       this.ensureReady().then((client) => client.fineTuning),
     );
   }
+
   get images(): Images {
     return createAsyncProxy(this.ensureReady().then((client) => client.images));
   }
+
   get audio(): Audio {
     return createAsyncProxy(this.ensureReady().then((client) => client.audio));
   }
+
   get responses(): Responses {
     return createAsyncProxy(
       this.ensureReady().then((client) => client.responses),
     );
   }
+
   get embeddings(): Embeddings {
     return createAsyncProxy(
       this.ensureReady().then((client) => client.embeddings),
     );
   }
+
   get models(): Models {
     return createAsyncProxy(this.ensureReady().then((client) => client.models));
   }
+
   get moderations(): Moderations {
     return createAsyncProxy(
       this.ensureReady().then((client) => client.moderations),
     );
   }
+
   get beta(): Beta {
     return createAsyncProxy(this.ensureReady().then((client) => client.beta));
   }
 }
 
+// Namespace declaration merge to add OpenAI types to TinfoilAI
 export namespace TinfoilAI {
   export import Chat = OpenAI.Chat;
   export import Audio = OpenAI.Audio;

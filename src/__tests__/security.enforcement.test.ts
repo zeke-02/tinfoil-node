@@ -105,7 +105,7 @@ describe("Security enforcement", () => {
       },
       ["../client"],
       async () => {
-        const { TinfoilAI } = await import("../client");
+        const { TinfoilAI } = await import("../tinfoilai");
         const client = new TinfoilAI({ apiKey: "key", baseURL: "https://secure.test/v1/" });
         await client.ready();
         assert.ok(capturedFetch, "Pinned TLS fetch should be provided in fallback");
