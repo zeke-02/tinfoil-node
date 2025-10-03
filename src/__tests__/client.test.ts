@@ -21,7 +21,7 @@ describe("TinfoilAI", () => {
       return;
     }
 
-    const { TinfoilAI } = await import("../client");
+    const { TinfoilAI } = await import("../tinfoilai");
     const client = new TinfoilAI({
       apiKey: testConfig.apiKey,
     });
@@ -39,7 +39,7 @@ describe("TinfoilAI", () => {
     process.env.TINFOIL_API_KEY = testConfig.apiKey;
 
     try {
-      const { TinfoilAI } = await import("../client");
+      const { TinfoilAI } = await import("../tinfoilai");
       const client = new TinfoilAI();
       await client.ready();
       assert.ok(client, "Client instance should be created with env fallback");
@@ -54,7 +54,7 @@ describe("TinfoilAI", () => {
       return;
     }
 
-    const { TinfoilAI } = await import("../client");
+    const { TinfoilAI } = await import("../tinfoilai");
     const client = new TinfoilAI({
       apiKey: testConfig.apiKey,
     });
@@ -84,7 +84,7 @@ describe("TinfoilAI", () => {
       return;
     }
 
-    const { TinfoilAI } = await import("../client");
+    const { TinfoilAI } = await import("../tinfoilai");
     const client = new TinfoilAI({
       apiKey: testConfig.apiKey,
     });
@@ -124,7 +124,7 @@ describe("TinfoilAI", () => {
       return;
     }
 
-    const { TinfoilAI } = await import("../client");
+    const { TinfoilAI } = await import("../tinfoilai");
     const client = new TinfoilAI({
       apiKey: testConfig.apiKey,
     });
@@ -148,7 +148,7 @@ describe("TinfoilAI", () => {
       return;
     }
 
-    const { TinfoilAI } = await import("../client");
+    const { TinfoilAI } = await import("../tinfoilai");
     const client = new TinfoilAI({
       apiKey: testConfig.apiKey,
     });

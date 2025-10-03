@@ -1,6 +1,6 @@
 // Browser-safe entry point: avoids Node built-ins
-export { TinfoilAI } from "./client";
-export { TinfoilAI as default } from "./client";
+export { TinfoilAI } from "./tinfoilai";
+export { TinfoilAI as default } from "./tinfoilai";
 
 export * from "./verifier";
 export * from "./verification-runner";

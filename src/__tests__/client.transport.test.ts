@@ -71,7 +71,7 @@ describe("Secure transport integration", () => {
       },
       ["../client"],
       async () => {
-        const { TinfoilAI } = await import("../client");
+        const { TinfoilAI } = await import("../tinfoilai");
         const client = new TinfoilAI({ apiKey: "test" });
         await client.ready();
 

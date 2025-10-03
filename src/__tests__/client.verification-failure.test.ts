@@ -29,7 +29,7 @@ describe("Client verification gating", () => {
       },
       ["../client"],
       async () => {
-        const { TinfoilAI } = await import("../client");
+        const { TinfoilAI } = await import("../tinfoilai");
         const client = new TinfoilAI({ apiKey: "test" });
 
         await assert.rejects(() => client.ready(), /verify/);

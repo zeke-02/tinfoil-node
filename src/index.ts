@@ -1,6 +1,6 @@
 // Re-export the TinfoilAI class
-export { TinfoilAI } from "./client";
-export { TinfoilAI as default } from "./client";
+export { TinfoilAI } from "./tinfoilai";
+export { TinfoilAI as default } from "./tinfoilai";
 
 // Export verifier and loader
 export * from "./verifier";
