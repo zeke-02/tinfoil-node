@@ -25,7 +25,6 @@
     },
     "./ai-sdk-provider": {
       "types": "./dist/ai-sdk-provider.d.ts",
-      "browser": "./dist/esm/ai-sdk-provider.browser.js",
       "import": "./dist/esm/ai-sdk-provider.js",
       "require": "./dist/ai-sdk-provider.js"
     },
