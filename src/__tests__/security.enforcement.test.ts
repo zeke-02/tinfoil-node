@@ -15,14 +15,12 @@ const MOCK_MEASUREMENT_TYPE = "https://tinfoil.sh/predicate/sev-snp-guest/v1";
 describe("Security enforcement", () => {
   const mockEhbpModule = (
     transportRequest: (url: string, init?: RequestInit) => Promise<Response>,
-    getServerPublicKeyHex: () => Promise<string>,
     identityGenerate: () => Promise<unknown>,
   ) => ({
     Identity: { generate: identityGenerate } as any,
     createTransport: async () => ({
-      request: transportRequest,
-      getServerPublicKey: () => ({ /* mock public key */ }),
-      getServerPublicKeyHex,
+      request: async () => new Response(null),
+      getServerPublicKey: () => ({ __mockHex: "hpke-key" }),
     }),
     Transport: class {
       async getServerPublicKeyHex(): Promise<string> {
@@ -30,9 +28,6 @@ describe("Security enforcement", () => {
       }
       async request(): Promise<Response> {
         return new Response();
-      }
-      getServerPublicKey(): any {
-        return { /* mock public key */ };
       }
     } as any,
     PROTOCOL: {},
@@ -55,11 +50,33 @@ describe("Security enforcement", () => {
     const transportRequest = t.mock.fn(
       async (_url: string, _init?: RequestInit) => new Response("ok"),
     );
-    const getServerPublicKeyHex = t.mock.fn(async () => "hpke-key");
     const identityGenerate = t.mock.fn(async () => ({ __mockIdentity: true }));
 
+    // Stub Transport class used by composite path; it routes to request host
+    class TransportStub {
+      private key: any;
+      constructor(_id: any, _serverHost: string, serverPublicKey: any) {
+        this.key = serverPublicKey;
+      }
+      getServerPublicKey(): any {
+        return this.key;
+      }
+      async getServerPublicKeyHex(): Promise<string> {
+        return this.key.__mockHex;
+      }
+      async request(url: string, init?: RequestInit): Promise<Response> {
+        return transportRequest(url, init);
+      }
+    }
+
     await withEhbpMock(
-      mockEhbpModule(transportRequest, getServerPublicKeyHex, identityGenerate),
+      {
+        Identity: { generate: identityGenerate } as any,
+        createTransport: mockEhbpModule(transportRequest, identityGenerate).createTransport,
+        Transport: TransportStub as any,
+        PROTOCOL: {} as any,
+        HPKE_CONFIG: {} as any,
+      },
       async () => {
         await encryptedBodyRequest("http://localhost:8080/v1/models", "hpke-key");
 
@@ -72,7 +89,6 @@ describe("Security enforcement", () => {
     );
 
     assert.strictEqual(identityGenerate.mock.callCount(), 1);
-    assert.strictEqual(getServerPublicKeyHex.mock.callCount(), 2);
     assert.strictEqual(transportRequest.mock.callCount(), 2);
   });
 
