@@ -1,9 +1,7 @@
 import { Verifier } from "./verifier";
 import type { VerificationDocument } from "./verifier";
-import { createEncryptedBodyFetch } from "./encrypted-body-fetch";
-import { createPinnedTlsFetch } from "./pinned-tls-fetch";
 import { TINFOIL_CONFIG } from "./config";
-import { isRealBrowser } from "./env";
+import { createSecureFetch } from "tinfoil/secure-fetch";
 
 interface SecureClientOptions {
   baseURL?: string;
@@ -48,30 +46,8 @@ export class SecureClient {
 
     // Extract keys from the verification document
     const { hpkePublicKey, tlsPublicKeyFingerprint } = this.verificationDocument.enclaveMeasurement;
-    let fetchFunction: typeof fetch;
 
-    if (hpkePublicKey) {
-      // HPKE available: use encrypted body fetch
-      fetchFunction = createEncryptedBodyFetch(this.baseURL!, hpkePublicKey, this.enclaveURL);
-    } else {
-      // HPKE not available: check if we're in a browser
-      if (isRealBrowser()) {
-        throw new Error(
-          "HPKE public key not available and TLS-only verification is not supported in browsers. " +
-          "Only HPKE-enabled enclaves can be used in browser environments."
-        );
-      }
-      
-      // Node.js environment: fall back to TLS-only verification using pinned TLS fetch
-      if (!tlsPublicKeyFingerprint) {
-        throw new Error(
-          "Neither HPKE public key nor TLS public key fingerprint available for verification"
-        );
-      }
-      fetchFunction = createPinnedTlsFetch(tlsPublicKeyFingerprint);
-    }
-
-    this._fetch = fetchFunction;
+    this._fetch = createSecureFetch(this.baseURL!, this.enclaveURL, hpkePublicKey, tlsPublicKeyFingerprint);
   }
 
   public async getVerificationDocument(): Promise<VerificationDocument> {

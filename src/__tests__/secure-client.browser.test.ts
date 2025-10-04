@@ -44,7 +44,7 @@ describe("SecureClient (browser)", () => {
       },
       ["../secure-client.browser"],
       async () => {
-        const { SecureClient } = await import("../secure-client.browser");
+        const { SecureClient } = await import("../secure-client");
         
         const client = new SecureClient({
           baseURL: "https://test.example.com/",
@@ -99,7 +99,7 @@ describe("SecureClient (browser)", () => {
       },
       ["../secure-client.browser"],
       async () => {
-        const { SecureClient } = await import("../secure-client.browser");
+        const { SecureClient } = await import("../secure-client");
         
         const client = new SecureClient({
           baseURL: "https://test.example.com/",
@@ -156,7 +156,7 @@ describe("SecureClient (browser)", () => {
       },
       ["../secure-client.browser"],
       async () => {
-        const { SecureClient } = await import("../secure-client.browser");
+        const { SecureClient } = await import("../secure-client");
         
         const client = new SecureClient({
           baseURL: "https://test.example.com/",
