@@ -20,6 +20,9 @@ async function main() {
     });
 
     console.log(response);
+
+    const responseBody = await response.text();
+    console.log("Response Body:", responseBody);
   } catch (error) {
     console.error("Error:", error);
     process.exit(1);

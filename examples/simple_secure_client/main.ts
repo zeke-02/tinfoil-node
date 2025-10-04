@@ -5,7 +5,7 @@ async function main() {
     const client = new SecureClient({
     });
 
-    const response = await client.fetch("https:inference.tinfoil.sh/v1/chat/completions", {
+    const response = await client.fetch("https://inference.tinfoil.sh/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -17,6 +17,9 @@ async function main() {
     });
 
     console.log(response);
+    
+    const responseBody = await response.text();
+    console.log("Response Body:", responseBody);
   } catch (error) {
     console.error("Error:", error);
     process.exit(1);
