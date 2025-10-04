@@ -2,11 +2,11 @@
 
 ## Examples
 
-1. **simple_chat** - Basic chat completion example using the TinfoilAI client
-2. **simple_secure_client** - Direct usage of the SecureClient for custom HTTP requests
-3. **simple_chat_ehbp** - TinfoilAI client with EHBP configuration
-4. **simple_secure_client_ehbp** - SecureClient with EHBP configuration
-5. **chat** - Advanced example with streaming chat and simple attestation UI
+1. **chat** - Basic chat completion example using the TinfoilAI client
+2. **secure_client** - Direct usage of the SecureClient for custom HTTP requests
+3. **ehbp_chat** - TinfoilAI client with EHBP configuration
+4. **ehbp_secure_client** - SecureClient with EHBP configuration
+5. **advanced_chat** - Advanced example with streaming chat and simple attestation UI
 
 ## Installation
 
