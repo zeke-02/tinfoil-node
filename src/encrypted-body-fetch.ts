@@ -8,6 +8,29 @@ let ehbpModulePromise: Promise<EhbpModule> | null = null;
 let ehbpModuleOverride: EhbpModule | undefined;
 
 // Public API
+
+export async function getHPKEKey(enclaveURL: string) : Promise<CryptoKey> {
+  const { Identity, PROTOCOL } = await getEhbpModule();
+  const url = new URL(enclaveURL);
+
+  // Fetch server public key
+  const keysURL = new URL(PROTOCOL.KEYS_PATH, enclaveURL);
+  const response = await fetch(keysURL.toString());
+
+  if (!response.ok) {
+    throw new Error(`Failed to get server public key: ${response.status}`);
+  }
+
+  const contentType = response.headers.get('content-type');
+  if (contentType !== PROTOCOL.KEYS_MEDIA_TYPE) {
+    throw new Error(`Invalid content type: ${contentType}`);
+  }
+
+  const keysData = new Uint8Array(await response.arrayBuffer());
+  const serverIdentity = await Identity.unmarshalPublicConfig(keysData);
+  return serverIdentity.getPublicKey();
+}
+
 export function normalizeEncryptedBodyRequestArgs(
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -120,9 +143,7 @@ async function getTransportForOrigin(origin: string, keyOrigin: string): Promise
   const clientIdentity = await Identity.generate();
 
   // Fetch the server's HPKE public key from the dedicated key origin.
-  // TODO: clean up this code. EHBP should make it easy to fetch the key without creating a transport object.
-  const keyTransport = await createTransport(keyOrigin, clientIdentity);
-  const serverPublicKey = keyTransport.getServerPublicKey();
+  const serverPublicKey = await getHPKEKey(keyOrigin);
   const requestHost = new URL(origin).host;
   return new Transport(clientIdentity, requestHost, serverPublicKey);
 }
