@@ -2,8 +2,8 @@ import { TinfoilAI } from "../../src";
 import { fmt } from "./ansi";
 import { loadEnvQuietly } from "./env";
 import { installX25519WarningFilter } from "./warnings";
-import { runVerificationDemo } from "./verification-flow";
 import { runStreamingExample } from "./chat-stream";
+import { displayVerificationSteps } from "./verification-ui";
 
 // 1) Load env early (quietly) so API keys are available to the rest of the app
 loadEnvQuietly();
@@ -17,15 +17,20 @@ async function main() {
     console.log(fmt.bold("Configuration"));
     console.log("API Key:", process.env.TINFOIL_API_KEY ? fmt.green("Set") : fmt.red("Not set"));
 
-    // 4) Run a verification demo with a small inline progress UI
-    await runVerificationDemo();
-
-    // 5) Create a client and run the streaming chat example
+    // 4) Create a client and run the streaming chat example
     const client = new TinfoilAI({
       baseURL: "https://ehbp.inf6.tinfoil.sh/v1/",
       enclaveURL: "https://ehbp.inf6.tinfoil.sh/v1/",
       configRepo: "tinfoilsh/confidential-inference-proxy-hpke",
-    }); // apiKey is read from TINFOIL_API_KEY
+    });
+
+    await client.ready();
+    const doc = await client.getVerificationDocument();
+
+    if (doc) {
+      displayVerificationSteps(doc);
+    }
+
     await runStreamingExample(client);
   } catch (error) {
     console.error("Main error:", error);
