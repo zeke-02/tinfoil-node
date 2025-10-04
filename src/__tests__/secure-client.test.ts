@@ -13,8 +13,13 @@ describe("SecureClient", () => {
     }));
     
     const mockFetch = t.mock.fn(async () => new Response(JSON.stringify({ message: "success" })));
-    const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string, _enclaveURL?: string) => mockFetch,
+    const createSecureFetchMock = t.mock.fn(
+      (_baseURL: string, _enclaveURL: string | undefined, hpkePublicKey: string | undefined, _tlsPublicKeyFingerprint: string | undefined) => {
+        if (hpkePublicKey) {
+          return mockFetch;
+        }
+        throw new Error("TLS-only verification not supported in tests");
+      },
     );
 
     await withMockedModules(
@@ -39,7 +44,7 @@ describe("SecureClient", () => {
             }
           },
         },
-        "./encrypted-body-fetch": { createEncryptedBodyFetch: createEncryptedBodyFetchMock },
+        "tinfoil/secure-fetch": { createSecureFetch: createSecureFetchMock },
       },
       ["../secure-client"],
       async () => {
@@ -54,12 +59,12 @@ describe("SecureClient", () => {
         await client.ready();
         
         assert.strictEqual(verifyMock.mock.callCount(), 1, "verify should be called once");
-        assert.strictEqual(createEncryptedBodyFetchMock.mock.callCount(), 1, "createEncryptedBodyFetch should be called once");
-        assert.deepStrictEqual(createEncryptedBodyFetchMock.mock.calls[0]?.arguments, [
-          "https://test.example.com/",
-          "mock-hpke-public-key",
-          "https://keys.test.example.com/",
-        ]);
+        assert.strictEqual(createSecureFetchMock.mock.callCount(), 1, "createSecureFetch should be called once");
+        // Check that createSecureFetch was called with the right parameters
+        assert.strictEqual(createSecureFetchMock.mock.calls[0]?.arguments[0], "https://test.example.com/");
+        assert.strictEqual(createSecureFetchMock.mock.calls[0]?.arguments[1], "https://keys.test.example.com/");
+        assert.strictEqual(createSecureFetchMock.mock.calls[0]?.arguments[2], "mock-hpke-public-key");
+        assert.strictEqual(createSecureFetchMock.mock.calls[0]?.arguments[3], undefined);
       },
     );
   });
@@ -73,8 +78,13 @@ describe("SecureClient", () => {
     
     const mockResponseBody = { test: "response" };
     const mockFetch = t.mock.fn(async () => new Response(JSON.stringify(mockResponseBody)));
-    const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string, _enclaveURL?: string) => mockFetch,
+    const createSecureFetchMock = t.mock.fn(
+      (_baseURL: string, _enclaveURL: string | undefined, hpkePublicKey: string | undefined, _tlsPublicKeyFingerprint: string | undefined) => {
+        if (hpkePublicKey) {
+          return mockFetch;
+        }
+        throw new Error("TLS-only verification not supported in tests");
+      },
     );
 
     await withMockedModules(
@@ -99,7 +109,7 @@ describe("SecureClient", () => {
             }
           },
         },
-        "./encrypted-body-fetch": { createEncryptedBodyFetch: createEncryptedBodyFetchMock },
+        "tinfoil/secure-fetch": { createSecureFetch: createSecureFetchMock },
       },
       ["../secure-client"],
       async () => {
@@ -144,8 +154,13 @@ describe("SecureClient", () => {
     }));
     
     const mockFetch = t.mock.fn(async () => new Response(null));
-    const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string, _enclaveURL?: string) => mockFetch,
+    const createSecureFetchMock = t.mock.fn(
+      (_baseURL: string, _enclaveURL: string | undefined, hpkePublicKey: string | undefined, _tlsPublicKeyFingerprint: string | undefined) => {
+        if (hpkePublicKey) {
+          return mockFetch;
+        }
+        throw new Error("TLS-only verification not supported in tests");
+      },
     );
 
     await withMockedModules(
@@ -160,7 +175,7 @@ describe("SecureClient", () => {
             }
           },
         },
-        "./encrypted-body-fetch": { createEncryptedBodyFetch: createEncryptedBodyFetchMock },
+        "tinfoil/secure-fetch": { createSecureFetch: createSecureFetchMock },
       },
       ["../secure-client"],
       async () => {
@@ -186,8 +201,13 @@ describe("SecureClient", () => {
     }));
     
     const mockFetch = t.mock.fn(async () => new Response(null));
-    const createEncryptedBodyFetchMock = t.mock.fn(
-      (_baseURL: string, _hpkePublicKey: string, _enclaveURL?: string) => mockFetch,
+    const createSecureFetchMock = t.mock.fn(
+      (_baseURL: string, _enclaveURL: string | undefined, hpkePublicKey: string | undefined, _tlsPublicKeyFingerprint: string | undefined) => {
+        if (hpkePublicKey) {
+          return mockFetch;
+        }
+        throw new Error("TLS-only verification not supported in tests");
+      },
     );
 
     await withMockedModules(
@@ -212,7 +232,7 @@ describe("SecureClient", () => {
             }
           },
         },
-        "./encrypted-body-fetch": { createEncryptedBodyFetch: createEncryptedBodyFetchMock },
+        "tinfoil/secure-fetch": { createSecureFetch: createSecureFetchMock },
       },
       ["../secure-client"],
       async () => {
@@ -224,14 +244,14 @@ describe("SecureClient", () => {
 
         // Verify that initialization hasn't happened yet
         assert.strictEqual(verifyMock.mock.callCount(), 0, "verify should not be called yet");
-        assert.strictEqual(createEncryptedBodyFetchMock.mock.callCount(), 0, "createEncryptedBodyFetch should not be called yet");
+        assert.strictEqual(createSecureFetchMock.mock.callCount(), 0, "createSecureFetch should not be called yet");
         
         // Access fetch for the first time - this should trigger initialization
         await client.fetch("/test", { method: "GET" });
         
         // Verify that initialization happened
         assert.strictEqual(verifyMock.mock.callCount(), 1, "verify should be called once");
-        assert.strictEqual(createEncryptedBodyFetchMock.mock.callCount(), 1, "createEncryptedBodyFetch should be called once");
+        assert.strictEqual(createSecureFetchMock.mock.callCount(), 1, "createSecureFetch should be called once");
       },
     );
   });
