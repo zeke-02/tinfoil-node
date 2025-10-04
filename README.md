@@ -130,7 +130,7 @@ The chat example demonstrates both streaming chat completions and real-time atte
 2. Install dependencies:
 
 ```bash
-npm install
+npm run build
 ```
 
 3. Optionally create a `.env` file with your configuration:
