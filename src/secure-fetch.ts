@@ -22,7 +22,7 @@ let fetchFunction: typeof fetch;
           "Neither HPKE public key nor TLS public key fingerprint available for verification"
         );
       }
-      fetchFunction = createPinnedTlsFetch(tlsPublicKeyFingerprint);
+      fetchFunction = createPinnedTlsFetch(baseURL, tlsPublicKeyFingerprint);
     }
     return fetchFunction
 }

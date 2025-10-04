@@ -4,13 +4,13 @@ import { X509Certificate, createHash } from "crypto";
 import { Readable } from "stream";
 import { ReadableStream as NodeReadableStream } from "stream/web";
 
-export function createPinnedTlsFetch(expectedFingerprintHex: string): typeof fetch {
+export function createPinnedTlsFetch(baseURL: string, expectedFingerprintHex: string): typeof fetch {
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
-    // Normalize URL
+    // Normalize URL with base URL support
     const makeURL = (value: RequestInfo | URL): URL => {
-      if (typeof value === "string") return new URL(value);
+      if (typeof value === "string") return new URL(value, baseURL);
       if (value instanceof URL) return value;
-      return new URL((value as Request).url);
+      return new URL((value as Request).url, baseURL);
     };
 
     const url = makeURL(input);
