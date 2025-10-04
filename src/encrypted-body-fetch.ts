@@ -104,32 +104,27 @@ function getEhbpModule(): Promise<EhbpModule> {
 }
 
 async function getTransportForOrigin(origin: string, keyOrigin: string): Promise<EhbpTransport> {
-
-  let transportPromise = (async () => {
   const { Identity, createTransport, Transport } = await getEhbpModule();
 
-    // Ensure secure browser context
-    if (typeof globalThis !== 'undefined') {
-      const isSecure = (globalThis as any).isSecureContext !== false;
-      const hasSubtle = !!(globalThis.crypto && (globalThis.crypto as Crypto).subtle);
-      if (!isSecure || !hasSubtle) {
-        const reason = !isSecure ? 'insecure context (use HTTPS or localhost)' : 'missing WebCrypto SubtleCrypto';
-        throw new Error(`EHBP requires a secure browser context: ${reason}`);
-      }
+  // Ensure secure browser context
+  if (typeof globalThis !== 'undefined') {
+    const isSecure = (globalThis as any).isSecureContext !== false;
+    const hasSubtle = !!(globalThis.crypto && (globalThis.crypto as Crypto).subtle);
+    if (!isSecure || !hasSubtle) {
+      const reason = !isSecure ? 'insecure context (use HTTPS or localhost)' : 'missing WebCrypto SubtleCrypto';
+      throw new Error(`EHBP requires a secure browser context: ${reason}`);
     }
+  }
 
-    // Create a single client identity to use for both key discovery and requests
-    const clientIdentity = await Identity.generate();
+  // Create a single client identity to use for both key discovery and requests
+  const clientIdentity = await Identity.generate();
 
-    // Fetch the server's HPKE public key from the dedicated key origin
-    const keyTransport = await createTransport(keyOrigin, clientIdentity);
-    const serverPublicKey = keyTransport.getServerPublicKey();
-    const requestHost = new URL(origin).host;
-    return new Transport(clientIdentity, requestHost, serverPublicKey);
-  })().catch((error) => {
-    throw error;
-  });
-  return transportPromise;
+  // Fetch the server's HPKE public key from the dedicated key origin.
+  // TODO: clean up this code. EHBP should make it easy to fetch the key without creating a transport object.
+  const keyTransport = await createTransport(keyOrigin, clientIdentity);
+  const serverPublicKey = keyTransport.getServerPublicKey();
+  const requestHost = new URL(origin).host;
+  return new Transport(clientIdentity, requestHost, serverPublicKey);
 }
 
 // Test utilities

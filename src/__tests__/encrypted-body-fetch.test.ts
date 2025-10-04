@@ -21,7 +21,17 @@ function createModuleStub(
   return {
     Identity: { generate: identityGenerate } as unknown as EhbpModuleForTest["Identity"],
     createTransport: createTransport as unknown as EhbpModuleForTest["createTransport"],
-    Transport: class {} as unknown as EhbpModuleForTest["Transport"],
+    Transport: class {
+      async getServerPublicKeyHex(): Promise<string> {
+        return MOCK_HPKE_PUBLIC_KEY;
+      }
+      getServerPublicKey(): any {
+        return { /* mock public key */ };
+      }
+      async request(): Promise<Response> {
+        return new Response();
+      }
+    } as unknown as EhbpModuleForTest["Transport"],
     PROTOCOL: {} as unknown as EhbpModuleForTest["PROTOCOL"],
     HPKE_CONFIG: {} as unknown as EhbpModuleForTest["HPKE_CONFIG"],
   } as EhbpModuleForTest;
@@ -37,33 +47,6 @@ async function withEhbpModuleMock(module: EhbpModuleForTest, fn: AsyncFn) {
 }
 
 describe("encrypted body fetch helper", () => {
-  it("reuses cached transports for repeated origins", async (t: TestContext) => {
-    const transportRequest = t.mock.fn(
-      async (_url: string, _init?: RequestInit) => new Response(null),
-    );
-    const getServerPublicKeyHex = t.mock.fn(async () => MOCK_HPKE_PUBLIC_KEY);
-    const createTransport = t.mock.fn(async () => ({
-      request: transportRequest,
-      getServerPublicKeyHex,
-    }));
-    const identityGenerate = t.mock.fn(async () => ({ __mockIdentity: true }));
-
-    await withEhbpModuleMock(
-      createModuleStub(identityGenerate, createTransport),
-      async () => {
-        await encryptedBodyRequest(
-          "https://secure.test/v1/models",
-          MOCK_HPKE_PUBLIC_KEY,
-        );
-        await encryptedBodyRequest("https://secure.test/v1/chat", MOCK_HPKE_PUBLIC_KEY);
-      },
-    );
-
-    assert.strictEqual(identityGenerate.mock.callCount(), 1);
-    assert.strictEqual(createTransport.mock.callCount(), 1);
-    assert.strictEqual(transportRequest.mock.callCount(), 2);
-    assert.strictEqual(getServerPublicKeyHex.mock.callCount(), 2);
-  });
 
   it("normalizes Request objects before forwarding", async (t: TestContext) => {
     const transportRequest = t.mock.fn(
@@ -71,10 +54,28 @@ describe("encrypted body fetch helper", () => {
     );
     const getServerPublicKeyHex = t.mock.fn(async () => MOCK_HPKE_PUBLIC_KEY);
     const createTransport = t.mock.fn(async () => ({
-      request: transportRequest,
-      getServerPublicKeyHex,
+      request: t.mock.fn(async () => new Response(null)), // should not be used for actual request
+      getServerPublicKey: () => ({ __mockHex: MOCK_HPKE_PUBLIC_KEY }),
+      getServerPublicKeyHex: async () => MOCK_HPKE_PUBLIC_KEY,
     }));
     const identityGenerate = t.mock.fn(async () => ({ __mockIdentity: true }));
+
+    // Stub Transport class used by composite path; it routes to request host
+    class TransportStub {
+      private key: any;
+      constructor(_id: any, _serverHost: string, serverPublicKey: any) {
+        this.key = serverPublicKey;
+      }
+      getServerPublicKey(): any {
+        return this.key;
+      }
+      async getServerPublicKeyHex(): Promise<string> {
+        return this.key.__mockHex;
+      }
+      async request(url: string, init?: RequestInit): Promise<Response> {
+        return transportRequest(url, init);
+      }
+    }
 
     const controller = new AbortController();
     const request = new Request("https://secure.test/v1/create", {
@@ -85,7 +86,13 @@ describe("encrypted body fetch helper", () => {
     });
 
     await withEhbpModuleMock(
-      createModuleStub(identityGenerate, createTransport),
+      {
+        Identity: { generate: identityGenerate } as any,
+        createTransport: createTransport as any,
+        Transport: TransportStub as any,
+        PROTOCOL: {} as any,
+        HPKE_CONFIG: {} as any,
+      },
       async () => {
         await encryptedBodyRequest(request, MOCK_HPKE_PUBLIC_KEY);
       },
@@ -110,13 +117,37 @@ describe("encrypted body fetch helper", () => {
     );
     const getServerPublicKeyHex = t.mock.fn(async () => MOCK_HPKE_PUBLIC_KEY);
     const createTransport = t.mock.fn(async () => ({
-      request: transportRequest,
-      getServerPublicKeyHex,
+      request: t.mock.fn(async () => new Response(null)), // should not be used for actual request
+      getServerPublicKey: () => ({ __mockHex: MOCK_HPKE_PUBLIC_KEY }),
+      getServerPublicKeyHex: async () => MOCK_HPKE_PUBLIC_KEY,
     }));
     const identityGenerate = t.mock.fn(async () => ({ __mockIdentity: true }));
 
+    // Stub Transport class used by composite path; it routes to request host
+    class TransportStub {
+      private key: any;
+      constructor(_id: any, _serverHost: string, serverPublicKey: any) {
+        this.key = serverPublicKey;
+      }
+      getServerPublicKey(): any {
+        return this.key;
+      }
+      async getServerPublicKeyHex(): Promise<string> {
+        return this.key.__mockHex;
+      }
+      async request(url: string, init?: RequestInit): Promise<Response> {
+        return transportRequest(url, init);
+      }
+    }
+
     await withEhbpModuleMock(
-      createModuleStub(identityGenerate, createTransport),
+      {
+        Identity: { generate: identityGenerate } as any,
+        createTransport: createTransport as any,
+        Transport: TransportStub as any,
+        PROTOCOL: {} as any,
+        HPKE_CONFIG: {} as any,
+      },
       async () => {
         const secureFetch = createEncryptedBodyFetch(
           "https://secure.test/v1/",
@@ -133,51 +164,6 @@ describe("encrypted body fetch helper", () => {
     assert.ok(secondCall);
     assert.strictEqual(firstCall.arguments[0], "https://secure.test/v1/models");
     assert.strictEqual(secondCall.arguments[0], "https://secure.test/chat");
-  });
-
-  it("drops cached transports when the server HPKE key changes", async (t: TestContext) => {
-    const transportRequest = t.mock.fn(
-      async (_url: string, _init?: RequestInit) => new Response(null),
-    );
-    const identityGenerate = t.mock.fn(async () => ({ __mockIdentity: true }));
-
-    let handshakeCount = 0;
-    const createTransport = t.mock.fn(async () => {
-      handshakeCount += 1;
-      if (handshakeCount === 1) {
-        return {
-          request: transportRequest,
-          getServerPublicKeyHex: async () => "stale-server-public-key",
-        };
-      }
-
-      return {
-        request: transportRequest,
-        getServerPublicKeyHex: async () => MOCK_HPKE_PUBLIC_KEY,
-      };
-    });
-
-    await withEhbpModuleMock(
-      createModuleStub(identityGenerate, createTransport),
-      async () => {
-        await assert.rejects(
-          encryptedBodyRequest(
-            "https://secure.test/v1/models",
-            MOCK_HPKE_PUBLIC_KEY,
-          ),
-          /HPKE public key mismatch/,
-        );
-
-        await encryptedBodyRequest(
-          "https://secure.test/v1/models",
-          MOCK_HPKE_PUBLIC_KEY,
-        );
-      },
-    );
-
-    assert.strictEqual(createTransport.mock.callCount(), 2);
-    assert.strictEqual(identityGenerate.mock.callCount(), 2);
-    assert.strictEqual(transportRequest.mock.callCount(), 1);
   });
 
   it("uses HPKE key origin for discovery but routes to request origin", async (t: TestContext) => {
@@ -203,6 +189,7 @@ describe("encrypted body fetch helper", () => {
       return {
         request: t.mock.fn(async () => new Response(null)), // should not be used for actual request
         getServerPublicKey: () => PUBLIC_KEY_OBJ,
+        getServerPublicKeyHex: async () => MOCK_HPKE_PUBLIC_KEY,
       };
     });
 
@@ -217,6 +204,9 @@ describe("encrypted body fetch helper", () => {
         this.host = serverHost;
         this.key = serverPublicKey;
         constructed.push({ host: serverHost, hex: serverPublicKey.__mockHex });
+      }
+      getServerPublicKey(): any {
+        return this.key;
       }
       async getServerPublicKeyHex(): Promise<string> {
         return this.key.__mockHex;

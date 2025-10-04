@@ -21,9 +21,20 @@ describe("Security enforcement", () => {
     Identity: { generate: identityGenerate } as any,
     createTransport: async () => ({
       request: transportRequest,
+      getServerPublicKey: () => ({ /* mock public key */ }),
       getServerPublicKeyHex,
     }),
-    Transport: class {},
+    Transport: class {
+      async getServerPublicKeyHex(): Promise<string> {
+        return "hpke-key";
+      }
+      async request(): Promise<Response> {
+        return new Response();
+      }
+      getServerPublicKey(): any {
+        return { /* mock public key */ };
+      }
+    } as any,
     PROTOCOL: {},
     HPKE_CONFIG: {},
   });
