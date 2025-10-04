@@ -9,8 +9,8 @@ function makeHex64(): string {
 
 const MOCK_MEASUREMENT_TYPE = "https://tinfoil.sh/predicate/sev-snp-guest/v1";
 
-describe("Verifier helpers", () => {
-  it("loadVerifier + runVerification success flow with updates", async (t: TestContext) => {
+describe("Verifier", () => {
+  it("verify() success flow with verification document", async (t: TestContext) => {
     const fetchMock = t.mock.fn(async (input: RequestInfo) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
@@ -18,7 +18,6 @@ describe("Verifier helpers", () => {
           headers: { "content-type": "application/json" },
         });
       }
-      // WASM fetch
       return new Response(new Uint8Array([0x00]), {
         headers: { "content-type": "application/wasm" },
       });
@@ -39,9 +38,8 @@ describe("Verifier helpers", () => {
             __esModule: true,
           },
         },
-        ["../verifier", "../verification-runner"],
+        ["../verifier"],
         async () => {
-          // Provide minimal Go runtime and WASM exports expected by initializeWasm
           (globalThis as any).Go = class {
             importObject: Record<string, unknown> = {};
             run() {
@@ -59,32 +57,26 @@ describe("Verifier helpers", () => {
               registers: ["r1", "r2"],
             });
 
-          const { loadVerifier } = await import("../verification-runner");
-          const client = await loadVerifier();
-
-          const updates: any[] = [];
-          const unsubscribe = client.subscribe((s: any) => updates.push(s));
-
-          const result = await client.runVerification({
-            configRepo: "owner/repo",
-            serverURL: "host",
-            onUpdate: (s: any) => updates.push(s),
+          const { Verifier } = await import("../verifier");
+          await Verifier.initializeWasm();
+          const verifier = new Verifier({
+            serverURL: "https://host/v1",
+            configRepo: "owner/repo"
           });
 
-          unsubscribe();
+          await verifier.verify();
+          const doc = verifier.getVerificationDocument();
 
+          assert.ok(doc, "verification document should exist");
           assert.strictEqual(fetchMock.mock.callCount() > 0, true);
-          assert.strictEqual(result.verification.status, "success");
-          assert.strictEqual(result.verification.securityVerified, true);
-          assert.strictEqual(result.runtime.status, "success");
-          assert.deepStrictEqual(result.runtime.measurement, { type: MOCK_MEASUREMENT_TYPE, registers: ["r1", "r2"] });
-          assert.strictEqual(result.runtime.tlsPublicKeyFingerprint, "tls-fp");
-          assert.strictEqual(result.runtime.hpkePublicKey, "hpke-key");
-          assert.strictEqual(typeof result.releaseDigest, "string");
-
-          // We should have emitted multiple state transitions
-          assert.ok(updates.length >= 5, "should emit multiple updates");
-          assert.deepStrictEqual(result, updates[updates.length - 1]);
+          assert.strictEqual(doc!.securityVerified, true);
+          assert.strictEqual(doc!.steps.verifyEnclave.status, "success");
+          assert.strictEqual(doc!.steps.verifyCode.status, "success");
+          assert.strictEqual(doc!.steps.compareMeasurements.status, "success");
+          assert.deepStrictEqual(doc!.enclaveMeasurement.measurement, { type: MOCK_MEASUREMENT_TYPE, registers: ["r1", "r2"] });
+          assert.strictEqual(doc!.enclaveMeasurement.tlsPublicKeyFingerprint, "tls-fp");
+          assert.strictEqual(doc!.enclaveMeasurement.hpkePublicKey, "hpke-key");
+          assert.strictEqual(typeof doc!.releaseDigest, "string");
         },
       );
     } finally {
@@ -122,7 +114,7 @@ describe("Verifier helpers", () => {
             __esModule: true,
           },
         },
-        ["../verifier", "../verification-runner"],
+        ["../verifier"],
         async () => {
           (globalThis as any).Go = class {
             importObject: Record<string, unknown> = {};
@@ -132,17 +124,20 @@ describe("Verifier helpers", () => {
           };
           (globalThis as any).verifyEnclave = async (_h: string) => ({
             measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1"] },
-            // Missing keys on purpose
           });
           (globalThis as any).verifyCode = async (_r: string, _d: string) => ({
             type: MOCK_MEASUREMENT_TYPE,
             registers: ["r1"],
           });
 
-          const { loadVerifier } = await import("../verification-runner");
-          const client = await loadVerifier();
+          const { Verifier } = await import("../verifier");
+          await Verifier.initializeWasm();
+          const verifier = new Verifier({
+            serverURL: "https://host/v1",
+            configRepo: "owner/repo"
+          });
 
-          await assert.rejects(() => client.verifyEnclave("host"), /Missing both tls_public_key and hpke_public_key/);
+          await assert.rejects(() => verifier.verifyEnclave("host"), /Missing both tls_public_key and hpke_public_key/);
         },
       );
     } finally {
@@ -152,7 +147,7 @@ describe("Verifier helpers", () => {
     }
   });
 
-  it("fetchLatestDigest failure bubbles into runVerification error state", async (t: TestContext) => {
+  it("fetchLatestDigest failure bubbles into verify error state", async (t: TestContext) => {
     const fetchMock = t.mock.fn(async (input: RequestInfo) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
@@ -178,7 +173,7 @@ describe("Verifier helpers", () => {
             __esModule: true,
           },
         },
-        ["../verifier", "../verification-runner"],
+        ["../verifier"],
         async () => {
           (globalThis as any).Go = class {
             importObject: Record<string, unknown> = {};
@@ -196,16 +191,14 @@ describe("Verifier helpers", () => {
             registers: ["x"],
           });
 
-          const { loadVerifier } = await import("../verification-runner");
-          const client = await loadVerifier();
-          const result = await client.runVerification({
-            configRepo: "o/r",
-            serverURL: "h",
+          const { Verifier } = await import("../verifier");
+          await Verifier.initializeWasm();
+          const verifier = new Verifier({
+            serverURL: "https://h/v1",
+            configRepo: "o/r"
           });
 
-          assert.strictEqual(result.code.status, "error");
-          assert.strictEqual(result.verification.status, "error");
-          assert.strictEqual(result.releaseDigest, "");
+          await assert.rejects(() => verifier.verify(), /GitHub API request failed/);
         },
       );
     } finally {

@@ -138,7 +138,16 @@ export interface AttestationResponse {
 }
 
 /**
- * Full verification document produced by a successful verify() call
+ * State of an intermediate verification step
+ */
+export interface VerificationStepState {
+  status: 'pending' | 'success' | 'failed';
+  error?: string;
+}
+
+/**
+ * Full verification document produced by a verify() call
+ * Includes state tracking for all intermediate steps
  */
 export interface VerificationDocument {
   configRepo: string;
@@ -146,7 +155,13 @@ export interface VerificationDocument {
   releaseDigest: string;
   codeMeasurement: AttestationMeasurement;
   enclaveMeasurement: AttestationResponse;
-  match: boolean;
+  securityVerified: boolean;
+  steps: {
+    fetchDigest: VerificationStepState;
+    verifyCode: VerificationStepState;
+    verifyEnclave: VerificationStepState;
+    compareMeasurements: VerificationStepState;
+  };
 }
 
 function registersEqual(a: string[], b: string[]): boolean {
@@ -541,42 +556,104 @@ export class Verifier {
 
   /**
    * Perform attestation verification
-   * 
+   *
    * This method:
    * 1. Fetches the latest code digest from GitHub releases
    * 2. Calls verifyCode to get the expected measurement for the code
    * 3. Calls verifyEnclave to get the actual runtime measurement
    * 4. Compares measurements using platform-specific logic (see `compareMeasurements()`)
    * 5. Returns the attestation response if verification succeeds
-   * 
+   *
    * @throws Error if measurements don't match or verification fails
    */
   public async verify(): Promise<AttestationResponse> {
-    // Get latest release digest first
-    const releaseDigest = await this.fetchLatestDigest(this.configRepo);
-    // Perform code attestation and runtime attestation in parallel
-    const [{ measurement: codeMeasurement }, attestation] = await Promise.all([
-      this.verifyCode(this.configRepo, releaseDigest),
-      this.verifyEnclave(this.serverURL),
-    ]);
+    const steps: VerificationDocument['steps'] = {
+      fetchDigest: { status: 'pending' },
+      verifyCode: { status: 'pending' },
+      verifyEnclave: { status: 'pending' },
+      compareMeasurements: { status: 'pending' },
+    };
 
-    // Compare measurements using platform-specific logic
+    let releaseDigest: string;
+    let codeMeasurement: AttestationMeasurement;
+    let attestation: AttestationResponse;
+
+    try {
+      releaseDigest = await this.fetchLatestDigest(this.configRepo);
+      steps.fetchDigest = { status: 'success' };
+    } catch (error) {
+      steps.fetchDigest = { status: 'failed', error: (error as Error).message };
+      throw error;
+    }
+
+    try {
+      const results = await Promise.all([
+        this.verifyCode(this.configRepo, releaseDigest).then(
+          (result) => {
+            steps.verifyCode = { status: 'success' };
+            return result;
+          },
+          (error) => {
+            steps.verifyCode = { status: 'failed', error: (error as Error).message };
+            throw error;
+          }
+        ),
+        this.verifyEnclave(this.serverURL).then(
+          (result) => {
+            steps.verifyEnclave = { status: 'success' };
+            return result;
+          },
+          (error) => {
+            steps.verifyEnclave = { status: 'failed', error: (error as Error).message };
+            throw error;
+          }
+        ),
+      ]);
+
+      codeMeasurement = results[0].measurement;
+      attestation = results[1];
+    } catch (error) {
+      this.lastVerificationDocument = {
+        configRepo: this.configRepo,
+        enclaveHost: this.serverURL,
+        releaseDigest: releaseDigest!,
+        codeMeasurement: codeMeasurement!,
+        enclaveMeasurement: attestation!,
+        securityVerified: false,
+        steps,
+      };
+      throw error;
+    }
+
     const measurementsMatchError = compareMeasurementsError(codeMeasurement, attestation.measurement);
-    
+
     if (measurementsMatchError) {
+      steps.compareMeasurements = { status: 'failed', error: measurementsMatchError.message };
+      this.lastVerificationDocument = {
+        configRepo: this.configRepo,
+        enclaveHost: this.serverURL,
+        releaseDigest: releaseDigest,
+        codeMeasurement,
+        enclaveMeasurement: attestation,
+        securityVerified: false,
+        steps,
+      };
       throw new Error(
         `Verification failed: measurements did not match.\nCode measurement (${codeMeasurement.type}: ${codeMeasurement.registers})\n` +
         `Runtime measurement (${attestation.measurement.type}: ${attestation.measurement.registers}:)\n ${measurementsMatchError.message}`
       );
     }
-    // Persist a full verification document for later retrieval by clients
+
+    steps.compareMeasurements = { status: 'success' };
+
     this.lastVerificationDocument = {
       configRepo: this.configRepo,
       enclaveHost: this.serverURL,
       releaseDigest: releaseDigest,
       codeMeasurement,
       enclaveMeasurement: attestation,
-      match: true,
+      securityVerified: true,
+      steps,
     };
     return attestation;
   }

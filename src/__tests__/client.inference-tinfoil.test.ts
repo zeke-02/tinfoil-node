@@ -43,7 +43,7 @@ describe("TinfoilAI - inference.tinfoil.sh integration", () => {
       assert.ok(verificationDoc, "Verification document should be available");
       // Fixed the assertion to match what we're actually setting
       assert.strictEqual(verificationDoc.configRepo, "tinfoilsh/confidential-inference-proxy-hpke", "Should use confidential-inference-proxy-hpke repo");
-      assert.ok(verificationDoc.match, "Verification should match");
+      assert.ok(verificationDoc.securityVerified, "Security should be verified");
       
       // TLS fingerprint should always be available
       assert.ok(verificationDoc.enclaveMeasurement.tlsPublicKeyFingerprint, "TLS public key fingerprint should be available");
