@@ -1,6 +1,6 @@
 {
   "name": "tinfoil",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "description": "Tinfoil secure OpenAI client wrapper",
   "main": "dist/index.js",
   "module": "dist/esm/index.js",
@@ -44,9 +44,14 @@
     },
     "./secure-client": {
       "types": "./dist/secure-client.d.ts",
-      "browser": "./dist/esm/secure-client.browser.js",
       "import": "./dist/esm/secure-client.js",
       "require": "./dist/secure-client.js"
+    },
+    "./secure-fetch": {
+      "types": "./dist/secure-fetch.d.ts",
+      "browser": "./dist/esm/secure-fetch.browser.js",
+      "import": "./dist/esm/secure-fetch.js",
+      "require": "./dist/secure-fetch.js"
     }
   },
   "scripts": {
