@@ -75,7 +75,7 @@ This package exposes verification helpers that load the Go-based WebAssembly ver
 
 The verification functionality is split into two modules:
 - `verifier.ts`: Core verification logic with low-level attestation methods
-- `verification-runner.ts`: Higher-level orchestration with state management and subscriptions
+
 
 ### Core Verifier API
 
@@ -94,76 +94,6 @@ const code = await verifier.verifyCode("tinfoilsh/repo", "digest-hash");
 
 // Fetch latest digest from GitHub releases
 const digest = await verifier.fetchLatestDigest("tinfoilsh/repo");
-```
-
-### High-level Orchestration API
-
-- `loadVerifier()` boots the verifier with state management and returns an enhanced client.
-- `client.subscribe(callback)` subscribes to real-time verification state updates.
-- `client.runVerification({ configRepo?, serverURL?, releaseDigest?, onUpdate? })` orchestrates the full flow and returns a structured result with step statuses and a comparison outcome. Both `configRepo` and `serverURL` default to values from `TINFOIL_CONFIG`.
-
-### End-to-end orchestration
-
-```typescript
-import { loadVerifier, TINFOIL_CONFIG } from "tinfoil";
-
-const verifier = await loadVerifier();
-
-const result = await verifier.runVerification({
-  onUpdate: (state) => {
-    // Receive stepwise updates: pending -> loading -> success/error
-    // Useful for logging or progress indicators
-    console.log("verification update:", state);
-  },
-  // Optional: override defaults if needed
-  // configRepo: "tinfoilsh/confidential-inference-proxy",
-  // serverURL: "https://inference.tinfoil.sh",
-  // releaseDigest: "<specific-release-sha256>",
-});
-
-if (result.verification.status === "success" && result.verification.securityVerified) {
-  console.log("Measurements match. Digest:", result.releaseDigest);
-} else {
-  console.error("Verification failed:", result);
-}
-```
-
-`runVerification` returns:
-
-```typescript
-type VerificationResult = {
-  code: { status: StepStatus; measurement?: AttestationMeasurement; error?: string };
-  runtime: {
-    status: StepStatus;
-    measurement?: AttestationMeasurement;
-    tlsPublicKeyFingerprint?: string;
-    hpkePublicKey?: string;
-    error?: string;
-  };
-  verification: { status: StepStatus; securityVerified?: boolean; error?: string };
-  releaseDigest: string;
-};
-```
-
-### Subscribe to state updates
-
-```typescript
-const verifier = await loadVerifier();
-const unsubscribe = verifier.subscribe((state) => {
-  console.log("state:", state);
-});
-
-// Run verification with default config (recommended)
-await verifier.runVerification();
-
-// Or override specific parameters if needed
-// await verifier.runVerification({
-//   configRepo: "tinfoilsh/confidential-inference-proxy",
-//   serverURL: "https://inference.tinfoil.sh",
-//   releaseDigest: "<specific-release-sha256>",
-// });
-
-unsubscribe();
 ```
 
 ## Testing

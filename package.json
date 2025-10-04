@@ -32,11 +32,6 @@
       "import": "./dist/esm/verifier.js",
       "require": "./dist/verifier.js"
     },
-    "./verification-runner": {
-      "types": "./dist/verification-runner.d.ts",
-      "import": "./dist/esm/verification-runner.js",
-      "require": "./dist/verification-runner.js"
-    },
     "./config": {
       "types": "./dist/config.d.ts",
       "import": "./dist/esm/config.js",
