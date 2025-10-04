@@ -130,6 +130,7 @@ The chat example demonstrates both streaming chat completions and real-time atte
 2. Install dependencies:
 
 ```bash
+npm install
 npm run build
 ```
 

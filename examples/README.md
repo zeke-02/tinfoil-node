@@ -13,6 +13,7 @@
 Before running any examples, install the dependencies from the root directory:
 
 ```bash
+npm install
 npm run build
 ```
 
