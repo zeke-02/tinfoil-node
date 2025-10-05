@@ -8,7 +8,6 @@ let ehbpModulePromise: Promise<EhbpModule> | null = null;
 let ehbpModuleOverride: EhbpModule | undefined;
 
 // Public API
-
 export async function getHPKEKey(enclaveURL: string) : Promise<CryptoKey> {
   const { Identity, PROTOCOL } = await getEhbpModule();
   const url = new URL(enclaveURL);
@@ -127,7 +126,7 @@ function getEhbpModule(): Promise<EhbpModule> {
 }
 
 async function getTransportForOrigin(origin: string, keyOrigin: string): Promise<EhbpTransport> {
-  const { Identity, createTransport, Transport } = await getEhbpModule();
+  const { Identity, Transport } = await getEhbpModule();
 
   // Ensure secure browser context
   if (typeof globalThis !== 'undefined') {
@@ -139,10 +138,8 @@ async function getTransportForOrigin(origin: string, keyOrigin: string): Promise
     }
   }
 
-  // Create a single client identity to use for both key discovery and requests
   const clientIdentity = await Identity.generate();
 
-  // Fetch the server's HPKE public key from the dedicated key origin.
   const serverPublicKey = await getHPKEKey(keyOrigin);
   const requestHost = new URL(origin).host;
   return new Transport(clientIdentity, requestHost, serverPublicKey);
