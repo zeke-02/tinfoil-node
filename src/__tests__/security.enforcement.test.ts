@@ -116,11 +116,12 @@ describe("Security enforcement", () => {
         HPKE_CONFIG: {} as any,
       },
       async () => {
-        await encryptedBodyRequest("http://localhost:8080/v1/models", MOCK_HPKE_PUBLIC_KEY);
+        await encryptedBodyRequest("http://localhost:8080/v1/models", MOCK_HPKE_PUBLIC_KEY, undefined, "https://enclave.address.sh");
 
         const fetchThroughProxy = createEncryptedBodyFetch(
           "http://localhost:8080/v1/",
           MOCK_HPKE_PUBLIC_KEY,
+          "https://enclave.address.sh"
         );
         await fetchThroughProxy("models");
       },

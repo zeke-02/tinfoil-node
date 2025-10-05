@@ -12,8 +12,12 @@ export async function getHPKEKey(enclaveURL: string) : Promise<CryptoKey> {
   const { Identity, PROTOCOL } = await getEhbpModule();
   const url = new URL(enclaveURL);
 
-  // Fetch server public key
   const keysURL = new URL(PROTOCOL.KEYS_PATH, enclaveURL);
+
+  if (keysURL.protocol !== 'https:') {
+    throw new Error(`HTTPS is required for remote key retrieval. Invalid protocol: ${keysURL.protocol}`);
+  }
+
   const response = await fetch(keysURL.toString());
 
   if (!response.ok) {
