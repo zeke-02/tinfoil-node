@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
+import { streamText } from "ai";
 
 const RUN_INTEGRATION = process.env.RUN_TINFOIL_INTEGRATION === "true";
 const SKIP_MESSAGE =
@@ -17,6 +18,7 @@ describe("Examples Integration Tests", () => {
       
       // Create a client similar to the basic chat example
       const client = new TinfoilAI({
+        apiKey: "tinfoil",
       });
 
       // Verify the client is properly initialized
@@ -109,6 +111,7 @@ describe("Examples Integration Tests", () => {
       
       // Create a client similar to the EHBP chat example
       const client = new TinfoilAI({
+        apiKey: "tinfoil",
         baseURL: "https://ehbp.inf6.tinfoil.sh/v1/",
         enclaveURL: "https://ehbp.inf6.tinfoil.sh/v1/",
         configRepo: "tinfoilsh/confidential-inference-proxy-hpke",
@@ -193,6 +196,46 @@ describe("Examples Integration Tests", () => {
       
       const firstChoice = parsedBody.choices[0];
       assert.ok(firstChoice, "First choice should exist");
+    });
+  });
+
+  describe("Streaming Chat Completion", () => {
+    it("should handle streaming chat completion", async (t) => {
+      if (!RUN_INTEGRATION) {
+        t.skip(SKIP_MESSAGE);
+        return;
+      }
+
+      const { TinfoilAI } = await import("../tinfoilai");
+      const client = new TinfoilAI({ apiKey: "tinfoil" });
+
+      await client.ready();
+
+      const stream = await client.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: "No matter what the user says, only respond with: Done.",
+          },
+          { role: "user", content: "Is this a test?" },
+        ],
+        model: "llama-free",
+        stream: true,
+      });
+
+      let accumulatedContent = "";
+
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content;
+        if (content) {
+          accumulatedContent += content;
+        }
+      }
+
+      assert.ok(
+        accumulatedContent.length > 0,
+        "Streaming completion should produce content",
+      );
     });
   });
 });
