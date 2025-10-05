@@ -14,11 +14,7 @@ describe("TinfoilAI - inference.tinfoil.sh integration", () => {
     }
 
     const { TinfoilAI } = await import("../tinfoilai");
-    const API_KEY = process.env.TINFOIL_API_KEY || process.env.OPENAI_API_KEY;
-    if (!API_KEY) {
-      t.skip("Set TINFOIL_API_KEY or OPENAI_API_KEY for integration test.");
-      return;
-    }
+    const API_KEY = "MOCK_API_KEY";
     
     const client = new TinfoilAI({
       apiKey: API_KEY,
