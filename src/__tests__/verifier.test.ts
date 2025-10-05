@@ -58,7 +58,6 @@ describe("Verifier", () => {
             });
 
           const { Verifier } = await import("../verifier");
-          await Verifier.initializeWasm();
           const verifier = new Verifier({
             serverURL: "https://host/v1",
             configRepo: "owner/repo"
@@ -131,7 +130,6 @@ describe("Verifier", () => {
           });
 
           const { Verifier } = await import("../verifier");
-          await Verifier.initializeWasm();
           const verifier = new Verifier({
             serverURL: "https://host/v1",
             configRepo: "owner/repo"
@@ -192,7 +190,6 @@ describe("Verifier", () => {
           });
 
           const { Verifier } = await import("../verifier");
-          await Verifier.initializeWasm();
           const verifier = new Verifier({
             serverURL: "https://h/v1",
             configRepo: "o/r"

@@ -308,62 +308,69 @@ export class Verifier {
   }
 
   /**
-   * Initialize the WebAssembly module
-   * This loads the Go runtime and makes verification functions available
+   * Execute a function with a fresh WASM instance that auto-cleans up
+   * This ensures Go runtime doesn't keep the process alive
    */
-  public static async initializeWasm(): Promise<void> {
-    if (Verifier.initializationPromise) {
-      return Verifier.initializationPromise;
+  private static async executeWithWasm<T>(fn: () => Promise<T>): Promise<T> {
+    await initializeWasmGlobals();
+
+    const goInstance = new globalThis.Go();
+
+    // Load WASM module
+    const fetchFn = getFetch();
+    const wasmResponse = await fetchFn(Verifier.defaultWasmUrl);
+    if (!wasmResponse.ok) {
+      throw new Error(`Failed to fetch WASM: ${wasmResponse.status} ${wasmResponse.statusText}`);
     }
 
-    Verifier.initializationPromise = (async () => {
-      try {
-        // Initialize globals if not already done
-        await initializeWasmGlobals();
-        
-        Verifier.goInstance = new globalThis.Go();
+    const wasmBuffer = await wasmResponse.arrayBuffer();
+    const result = await WebAssembly.instantiate(
+      wasmBuffer,
+      goInstance.importObject,
+    );
 
-        // Load WASM module
-        const fetchFn = getFetch();
-        const wasmResponse = await fetchFn(Verifier.defaultWasmUrl);
-        if (!wasmResponse.ok) {
-          throw new Error(`Failed to fetch WASM: ${wasmResponse.status} ${wasmResponse.statusText}`);
-        }
-        
-        const wasmBuffer = await wasmResponse.arrayBuffer();
-        const result = await WebAssembly.instantiate(
-          wasmBuffer,
-          Verifier.goInstance.importObject,
-        );
-        
-        // Run the Go instance - this makes functions available on globalThis
-        Verifier.goInstance.run(result.instance);
-        
-        // Wait for initialization to complete
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Ensure required functions are available
-        if (typeof globalThis.verifyCode === "undefined" || typeof globalThis.verifyEnclave === "undefined") {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
+    // Start the Go instance in the background
+    // We don't await this - it runs continuously
+    goInstance.run(result.instance);
 
-        // Apply log suppression if requested
-        if (Verifier.wasmLogsSuppressed && (globalThis as any).fs?.writeSync) {
-          const fsObj = (globalThis as any).fs as { writeSync: (fd: number, buf: Uint8Array) => number };
-          if (!Verifier.originalFsWriteSync) {
-            Verifier.originalFsWriteSync = fsObj.writeSync.bind(fsObj);
-          }
-          fsObj.writeSync = function (_fd: number, buf: Uint8Array) {
-            return buf.length;
-          };
-        }
-      } catch (error) {
-        console.error("WASM initialization error:", error);
-        throw error;
+    // Wait for WASM functions to be available
+    await new Promise(resolve => setTimeout(resolve, 100));
+    if (typeof globalThis.verifyCode === "undefined" || typeof globalThis.verifyEnclave === "undefined") {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Apply log suppression if requested
+    if (Verifier.wasmLogsSuppressed && (globalThis as any).fs?.writeSync) {
+      const fsObj = (globalThis as any).fs as { writeSync: (fd: number, buf: Uint8Array) => number };
+      if (!Verifier.originalFsWriteSync) {
+        Verifier.originalFsWriteSync = fsObj.writeSync.bind(fsObj);
       }
-    })();
+      fsObj.writeSync = function (_fd: number, buf: Uint8Array) {
+        return buf.length;
+      };
+    }
 
-    return Verifier.initializationPromise;
+    try {
+      // Execute the user's function
+      const result = await fn();
+      return result;
+    } finally {
+      // Clean up the Go instance
+      if (goInstance._scheduledTimeouts instanceof Map) {
+        for (const timeoutId of goInstance._scheduledTimeouts.values()) {
+          clearTimeout(timeoutId);
+        }
+        goInstance._scheduledTimeouts.clear();
+      }
+
+      if (typeof goInstance.exit === 'function') {
+        try {
+          goInstance.exit(0);
+        } catch (e) {
+          // Ignore exit errors
+        }
+      }
+    }
   }
 
   /**
@@ -423,8 +430,6 @@ export class Verifier {
     return new Promise(async (resolve, reject) => {
       try {
         const targetHost = enclaveHost || this.serverURL;
-
-        await Verifier.initializeWasm();
 
         if (typeof globalThis.verifyEnclave !== "function") {
           reject(new Error("WASM verifyEnclave function not available"));
@@ -514,8 +519,6 @@ export class Verifier {
    * @returns Code measurement
    */
   public async verifyCode(configRepo: string, digest: string): Promise<{ measurement: AttestationMeasurement }> {
-    await Verifier.initializeWasm();
-    
     if (typeof globalThis.verifyCode !== "function") {
       throw new Error("WASM verifyCode function not available");
     }
@@ -564,9 +567,20 @@ export class Verifier {
    * 4. Compares measurements using platform-specific logic (see `compareMeasurements()`)
    * 5. Returns the attestation response if verification succeeds
    *
+   * The WASM runtime is automatically initialized and cleaned up within this method.
+   *
    * @throws Error if measurements don't match or verification fails
    */
   public async verify(): Promise<AttestationResponse> {
+    return Verifier.executeWithWasm(async () => {
+      return this.verifyInternal();
+    });
+  }
+
+  /**
+   * Internal verification logic that runs within WASM context
+   */
+  private async verifyInternal(): Promise<AttestationResponse> {
     const steps: VerificationDocument['steps'] = {
       fetchDigest: { status: 'pending' },
       verifyCode: { status: 'pending' },
@@ -655,6 +669,7 @@ export class Verifier {
       securityVerified: true,
       steps,
     };
+
     return attestation;
   }
 
@@ -697,12 +712,6 @@ function shouldAutoInitializeWasm(): boolean {
 
   const hasBrowserGlobals = typeof globalAny.window === "object" && typeof globalAny.document === "object";
   return hasBrowserGlobals;
-}
-
-if (shouldAutoInitializeWasm()) {
-  void Verifier.initializeWasm().catch(error => {
-    console.error(error);
-  });
 }
 
 /**
