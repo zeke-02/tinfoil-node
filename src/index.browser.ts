@@ -6,3 +6,4 @@ export * from "./verifier";
 export * from "./ai-sdk-provider";
 export * from "./config";
 export { SecureClient } from "./secure-client";
+export { UnverifiedClient } from "./unverified-client";

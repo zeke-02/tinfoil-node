@@ -64,7 +64,7 @@ export function normalizeEncryptedBodyRequestArgs(
 
 export async function encryptedBodyRequest(
   input: RequestInfo | URL,
-  hpkePublicKey: string,
+  hpkePublicKey?: string,
   init?: RequestInit,
   enclaveURL?: string,
 ): Promise<Response> {
@@ -83,15 +83,18 @@ export async function encryptedBodyRequest(
   }
   
   const transportInstance = await transport;
-  const transportKeyHash = await transportInstance.getServerPublicKeyHex(); 
-  if(transportKeyHash !== hpkePublicKey) {
-    throw new Error(`HPKE public key mismatch. Expected: ${hpkePublicKey}, Got: ${transportKeyHash}`);
+  
+  if (hpkePublicKey) {
+    const transportKeyHash = await transportInstance.getServerPublicKeyHex();
+    if (transportKeyHash !== hpkePublicKey) {
+      throw new Error(`HPKE public key mismatch. Expected: ${hpkePublicKey}, Got: ${transportKeyHash}`);
+    }
   }
 
   return transportInstance.request(requestUrl, requestInit);
 }
 
-export function createEncryptedBodyFetch(baseURL: string, hpkePublicKey: string, enclaveURL?: string): typeof fetch {
+export function createEncryptedBodyFetch(baseURL: string, hpkePublicKey?: string, enclaveURL?: string): typeof fetch {
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const normalized = normalizeEncryptedBodyRequestArgs(input, init);
     const targetUrl = new URL(normalized.url, baseURL);
