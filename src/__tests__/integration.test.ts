@@ -199,6 +199,61 @@ describe("Examples Integration Tests", () => {
     });
   });
 
+    describe("EHBP Unverified Client Example", () => {
+    it("should create a UnverifiedClient with EHBP configuration and make a direct fetch request", async (t) => {
+      if (!RUN_INTEGRATION) {
+        t.skip(SKIP_MESSAGE);
+        return;
+      }
+
+      const { UnverifiedClient } = await import("../unverified-client");
+      
+      // Create a client similar to the EHBP secure client example
+      const client = new UnverifiedClient({
+        baseURL: "https://ehbp.inf6.tinfoil.sh/v1/",
+        enclaveURL: "https://ehbp.inf6.tinfoil.sh/v1/",
+        configRepo: "tinfoilsh/confidential-inference-proxy-hpke",
+      });
+
+      // Verify the client is properly initialized
+      assert.ok(client, "Client should be created");
+      
+      // Wait for client to be ready
+      await client.ready();
+      
+      // Make a direct fetch request to the chat completions endpoint
+      const response = await client.fetch("/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-free",
+          messages: [{ role: "user", content: "Hello!" }],
+        }),
+      });
+
+      // Verify the response
+      assert.ok(response, "Response should be returned");
+      assert.strictEqual(response.status, 200, "Response should have status 200");
+      assert.ok(response.headers, "Response should have headers");
+
+      // Parse and verify the response body
+      const responseBody = await response.text();
+      assert.ok(responseBody, "Response body should be returned as text");
+      assert.ok(responseBody.length > 0, "Response body should not be empty");
+      
+      // Try to parse as JSON to verify it's valid JSON
+      const parsedBody = JSON.parse(responseBody);
+      assert.ok(parsedBody, "Response body should be parseable as JSON");
+      assert.ok(Array.isArray(parsedBody.choices), "Choices should be an array");
+      assert.ok(parsedBody.choices.length > 0, "Should have at least one choice");
+      
+      const firstChoice = parsedBody.choices[0];
+      assert.ok(firstChoice, "First choice should exist");
+    });
+  });
+
   describe("Streaming Chat Completion", () => {
     it("should handle streaming chat completion", async (t) => {
       if (!RUN_INTEGRATION) {
