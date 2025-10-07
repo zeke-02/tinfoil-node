@@ -76,12 +76,13 @@ export async function encryptedBodyRequest(
   if(!transport) {
     transport = getTransportForOrigin(origin, keyOrigin);
   }
-  
+
   const transportInstance = await transport;
-  
+
   if (hpkePublicKey) {
     const transportKeyHash = await transportInstance.getServerPublicKeyHex();
     if (transportKeyHash !== hpkePublicKey) {
+      transport = null;
       throw new Error(`HPKE public key mismatch. Expected: ${hpkePublicKey}, Got: ${transportKeyHash}`);
     }
   }
@@ -98,8 +99,11 @@ export function createEncryptedBodyFetch(baseURL: string, hpkePublicKey?: string
   }) as typeof fetch;
 }
 
+export function resetTransport(): void {
+  transport = null;
+}
+
 async function getTransportForOrigin(origin: string, keyOrigin: string): Promise<EhbpTransport> {
-  // Ensure secure browser context
   if (typeof globalThis !== 'undefined') {
     const isSecure = (globalThis as any).isSecureContext !== false;
     const hasSubtle = !!(globalThis.crypto && (globalThis.crypto as Crypto).subtle);
