@@ -161,6 +161,9 @@ export interface VerificationDocument {
     verifyCode: VerificationStepState;
     verifyEnclave: VerificationStepState;
     compareMeasurements: VerificationStepState;
+    createTransport?: VerificationStepState;
+    verifyHPKEKey?: VerificationStepState;
+    otherError?: VerificationStepState;
   };
 }
 
@@ -597,6 +600,15 @@ export class Verifier {
       steps.fetchDigest = { status: 'success' };
     } catch (error) {
       steps.fetchDigest = { status: 'failed', error: (error as Error).message };
+      this.lastVerificationDocument = {
+        configRepo: this.configRepo,
+        enclaveHost: this.serverURL,
+        releaseDigest: '',
+        codeMeasurement: { type: '', registers: [] },
+        enclaveMeasurement: { measurement: { type: '', registers: [] } },
+        securityVerified: false,
+        steps,
+      };
       throw error;
     }
 

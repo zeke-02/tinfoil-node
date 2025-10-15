@@ -30,7 +30,13 @@ describe("SecureClient (browser)", () => {
                   tlsPublicKeyFingerprint: "mock-tls-fingerprint",
                   measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 },
-                match: true,
+                securityVerified: true,
+                steps: {
+                  fetchDigest: { status: 'success' as const },
+                  verifyCode: { status: 'success' as const },
+                  verifyEnclave: { status: 'success' as const },
+                  compareMeasurements: { status: 'success' as const },
+                },
               };
             }
           },
