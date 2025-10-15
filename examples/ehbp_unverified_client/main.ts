@@ -2,11 +2,7 @@ import { UnverifiedClient } from "tinfoil";
 
 async function main() {
   try {
-    const client = new UnverifiedClient({
-      baseURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-      enclaveURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-      configRepo: "tinfoilsh/confidential-inference-proxy-hpke",
-    });
+    const client = new UnverifiedClient();
 
     const response = await client.fetch("/v1/chat/completions", {
       method: "POST",

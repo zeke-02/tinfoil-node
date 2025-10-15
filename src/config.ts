@@ -3,20 +3,17 @@
  */
 export const TINFOIL_CONFIG = {
   /**
-   * The full base URL for the inference API
+   * The base URL for the Tinfoil router API
    */
-  INFERENCE_BASE_URL: "https://inference.tinfoil.sh/v1/",
+  INFERENCE_BASE_URL: "https://router.inf6.tinfoil.sh/v1/",
 
   /**
-   * The URL used to fetch the enclave server public key (via EHBP .well-known endpoint).
-   * and the attestation (vial the attestation .well-known endpoint too).
-   * Defaults to the same value as `INFERENCE_BASE_URL` so enclaveURL and baseURL share
-   * the same default. Callers may override independently if key discovery is hosted elsewhere.
+   * The URL for enclave key discovery and attestation endpoints
    */
-  ENCLAVE_URL: "https://inference.tinfoil.sh/v1/",
+  ENCLAVE_URL: "https://router.inf6.tinfoil.sh/v1/",
 
   /**
-   * The GitHub repository for the confidential inference proxy
+   * The GitHub repository for code attestation verification
    */
-  INFERENCE_PROXY_REPO: "tinfoilsh/confidential-inference-proxy",
+  INFERENCE_PROXY_REPO: "tinfoilsh/confidential-model-router",
 } as const;
