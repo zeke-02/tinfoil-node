@@ -10,7 +10,7 @@ export const TINFOIL_CONFIG = {
   /**
    * The URL for enclave key discovery and attestation endpoints
    */
-  ENCLAVE_URL: "https://router.inf6.tinfoil.sh/v1/",
+  ENCLAVE_URL: "https://router.inf6.tinfoil.sh",
 
   /**
    * The GitHub repository for code attestation verification
