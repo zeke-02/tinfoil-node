@@ -18,11 +18,7 @@ async function main() {
     console.log("API Key:", process.env.TINFOIL_API_KEY ? fmt.green("Set") : fmt.red("Not set"));
 
     // 4) Create a client and run the streaming chat example
-    const client = new TinfoilAI({
-      baseURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-      enclaveURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-      configRepo: "tinfoilsh/confidential-inference-proxy-hpke",
-    });
+    const client = new TinfoilAI();
 
     await client.ready();
     const doc = await client.getVerificationDocument();

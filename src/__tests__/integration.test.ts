@@ -58,17 +58,16 @@ describe("Examples Integration Tests", () => {
       const { SecureClient } = await import("../secure-client");
       
       // Create a client similar to the secure client example
-      const client = new SecureClient({
-      });
+      const client = new SecureClient();
 
       // Verify the client is properly initialized
       assert.ok(client, "Client should be created");
-      
+
       // Wait for client to be ready
       await client.ready();
-      
+
       // Make a direct fetch request to the chat completions endpoint
-      const response = await client.fetch("https://inference.tinfoil.sh/v1/chat/completions", {
+      const response = await client.fetch("/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -109,12 +108,9 @@ describe("Examples Integration Tests", () => {
 
       const { TinfoilAI } = await import("../tinfoilai");
       
-      // Create a client similar to the EHBP chat example
+      // Create a client using environment variable configuration
       const client = new TinfoilAI({
         apiKey: "tinfoil",
-        baseURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-        enclaveURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-        configRepo: "tinfoilsh/confidential-inference-proxy-hpke",
       });
 
       // Verify the client is properly initialized
@@ -153,12 +149,8 @@ describe("Examples Integration Tests", () => {
 
       const { SecureClient } = await import("../secure-client");
       
-      // Create a client similar to the EHBP secure client example
-      const client = new SecureClient({
-        baseURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-        enclaveURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-        configRepo: "tinfoilsh/confidential-inference-proxy-hpke",
-      });
+      // Create a client using environment variable configuration
+      const client = new SecureClient();
 
       // Verify the client is properly initialized
       assert.ok(client, "Client should be created");
@@ -208,12 +200,8 @@ describe("Examples Integration Tests", () => {
 
       const { UnverifiedClient } = await import("../unverified-client");
       
-      // Create a client similar to the EHBP secure client example
-      const client = new UnverifiedClient({
-        baseURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-        enclaveURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-        configRepo: "tinfoilsh/confidential-inference-proxy-hpke",
-      });
+      // Create a client using environment variable configuration
+      const client = new UnverifiedClient();
 
       // Verify the client is properly initialized
       assert.ok(client, "Client should be created");

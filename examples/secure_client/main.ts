@@ -2,10 +2,9 @@ import { SecureClient } from "tinfoil";
 
 async function main() {
   try {
-    const client = new SecureClient({
-    });
+    const client = new SecureClient();
 
-    const response = await client.fetch("https://inference.tinfoil.sh/v1/chat/completions", {
+    const response = await client.fetch("/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

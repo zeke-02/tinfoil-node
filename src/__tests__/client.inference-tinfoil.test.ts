@@ -6,7 +6,7 @@ const SKIP_MESSAGE = "Set RUN_TINFOIL_INTEGRATION=true to enable network integra
 
 console.log("- RUN_TINFOIL_INTEGRATION:", process.env.RUN_TINFOIL_INTEGRATION);
 
-describe("TinfoilAI - inference.tinfoil.sh integration", () => {
+describe("TinfoilAI - API integration", () => {
   it("should verify enclave with confidential-inference-proxy repo", async (t) => {
     if (!RUN_INTEGRATION) {
       t.skip(SKIP_MESSAGE);
@@ -14,13 +14,11 @@ describe("TinfoilAI - inference.tinfoil.sh integration", () => {
     }
 
     const { TinfoilAI } = await import("../tinfoilai");
+    const { TINFOIL_CONFIG } = await import("../config");
     const API_KEY = "MOCK_API_KEY";
-    
+
     const client = new TinfoilAI({
       apiKey: API_KEY,
-      baseURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-      enclaveURL: "https://ehbp.inf6.tinfoil.sh/v1/",
-      configRepo: "tinfoilsh/confidential-inference-proxy-hpke",
     });
 
     try {
@@ -28,10 +26,9 @@ describe("TinfoilAI - inference.tinfoil.sh integration", () => {
 
       // Get the verification document to ensure verification happened
       const verificationDoc = await client.getVerificationDocument();
-      
+
       assert.ok(verificationDoc, "Verification document should be available");
-      // Fixed the assertion to match what we're actually setting
-      assert.strictEqual(verificationDoc.configRepo, "tinfoilsh/confidential-inference-proxy-hpke", "Should use confidential-inference-proxy-hpke repo");
+      assert.strictEqual(verificationDoc.configRepo, TINFOIL_CONFIG.INFERENCE_PROXY_REPO, "Should use configured repo");
       assert.ok(verificationDoc.securityVerified, "Security should be verified");
       
       // TLS fingerprint should always be available
