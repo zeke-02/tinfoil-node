@@ -2,8 +2,7 @@ import { TinfoilAI } from "tinfoil";
 
 async function main() {
   try {
-    const client = new TinfoilAI({
-    });
+    const client = new TinfoilAI();
 
     const completion = await client.chat.completions.create({
       messages: [{ role: "user", content: "Hello!" }],
