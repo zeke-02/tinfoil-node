@@ -23,6 +23,9 @@ describe("Client verification gating", () => {
             verify() {
               throw new Error("verify failed");
             }
+            getVerificationDocument() {
+              return undefined;
+            }
           },
         },
         "./encrypted-body-fetch": { createEncryptedBodyFetch },

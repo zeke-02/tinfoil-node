@@ -93,6 +93,40 @@ const code = await verifier.verifyCode("tinfoilsh/repo", "digest-hash");
 const digest = await verifier.fetchLatestDigest("tinfoilsh/repo");
 ```
 
+### Verification Document
+
+The `SecureClient` provides access to a comprehensive verification document that tracks all verification steps, including failures:
+
+```typescript
+import { SecureClient } from "tinfoil";
+
+const client = new SecureClient();
+
+try {
+  await client.ready();
+  const response = await client.fetch('https://api.example.com/data');
+} catch (error) {
+  // Even on error, you can access the verification document
+  const doc = await client.getVerificationDocument();
+
+  // The document contains detailed step information:
+  // - fetchDigest: GitHub release digest retrieval
+  // - verifyCode: Code measurement verification
+  // - verifyEnclave: Runtime attestation verification
+  // - compareMeasurements: Code vs runtime measurement comparison
+  // - createTransport: Transport initialization (optional)
+  // - verifyHPKEKey: HPKE key verification (optional)
+  // - otherError: Catch-all for unexpected errors (optional)
+
+  console.log('Security verified:', doc.securityVerified);
+
+  // Check individual steps
+  if (doc.steps.verifyEnclave.status === 'failed') {
+    console.log('Enclave verification failed:', doc.steps.verifyEnclave.error);
+  }
+}
+```
+
 ## Testing
 
 The project includes both unit tests and integration tests:
