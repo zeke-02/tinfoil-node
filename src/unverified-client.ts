@@ -30,14 +30,14 @@ export class UnverifiedClient {
   }
 
   private async initUnverifiedClient(): Promise<void> {
-    // Fetch router if no enclaveURL is provided
-    if (!this.enclaveURL) {
+    // Only fetch router if neither baseURL nor enclaveURL is provided
+    if (!this.baseURL && !this.enclaveURL) {
       const routerAddress = await fetchRouter();
       this.enclaveURL = `https://${routerAddress}`;
-      this.baseURL = this.baseURL || `https://${routerAddress}/v1/`;
+      this.baseURL = `https://${routerAddress}/v1/`;
     }
 
-    // Ensure baseURL is always initialized before calling createEncryptedBodyFetch
+    // Ensure both baseURL and enclaveURL are initialized
     if (!this.baseURL) {
       if (this.enclaveURL) {
         // If enclaveURL is provided but baseURL is not, derive baseURL from enclaveURL
@@ -45,6 +45,16 @@ export class UnverifiedClient {
         this.baseURL = `${enclaveUrl.origin}/v1/`;
       } else {
         throw new Error("Unable to determine baseURL: neither baseURL nor enclaveURL provided");
+      }
+    }
+
+    if (!this.enclaveURL) {
+      if (this.baseURL) {
+        // If baseURL is provided but enclaveURL is not, derive enclaveURL from baseURL
+        const baseUrl = new URL(this.baseURL);
+        this.enclaveURL = baseUrl.origin;
+      } else {
+        throw new Error("Unable to determine enclaveURL: neither baseURL nor enclaveURL provided");
       }
     }
 
