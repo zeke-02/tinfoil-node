@@ -194,7 +194,8 @@ function compareMeasurementsError(
 
   if (codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
     switch (runtimeMeasurement.type) {
-      case PLATFORM_TYPES.TDX_GUEST_V1: {
+      case PLATFORM_TYPES.TDX_GUEST_V1:
+      case PLATFORM_TYPES.TDX_GUEST_V2: {
         if (codeMeasurement.registers.length < 3 || runtimeMeasurement.registers.length < 4) {
           return new Error(MEASUREMENT_ERROR_MESSAGES.FEW_REGISTERS);
         }
@@ -380,7 +381,7 @@ export class Verifier {
 
   /**
    * Fetch the latest release digest from GitHub
-   * @param configRepo - Repository name (e.g., "tinfoilsh/confidential-inference-proxy")
+   * @param configRepo - Repository name (e.g., "tinfoilsh/confidential-model-router")
    * @returns The digest hash
    */
   public async fetchLatestDigest(configRepo?: string): Promise<string> {
