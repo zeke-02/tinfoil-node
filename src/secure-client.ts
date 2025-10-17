@@ -40,6 +40,17 @@ export class SecureClient {
       this.baseURL = this.baseURL || `https://${routerAddress}/v1/`;
     }
 
+    // Ensure baseURL is always initialized before calling createSecureFetch
+    if (!this.baseURL) {
+      if (this.enclaveURL) {
+        // If enclaveURL is provided but baseURL is not, derive baseURL from enclaveURL
+        const enclaveUrl = new URL(this.enclaveURL);
+        this.baseURL = `${enclaveUrl.origin}/v1/`;
+      } else {
+        throw new Error("Unable to determine baseURL: neither baseURL nor enclaveURL provided");
+      }
+    }
+
     const verifier = new Verifier({
       serverURL: this.enclaveURL,
       configRepo: this.configRepo,
@@ -57,7 +68,7 @@ export class SecureClient {
       const { hpkePublicKey, tlsPublicKeyFingerprint } = this.verificationDocument.enclaveMeasurement;
 
       try {
-        this._fetch = createSecureFetch(this.baseURL!, this.enclaveURL, hpkePublicKey, tlsPublicKeyFingerprint);
+        this._fetch = createSecureFetch(this.baseURL, this.enclaveURL, hpkePublicKey, tlsPublicKeyFingerprint);
       } catch (transportError) {
         this.verificationDocument.steps.createTransport = {
           status: 'failed',

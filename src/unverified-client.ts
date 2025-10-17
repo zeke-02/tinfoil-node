@@ -37,7 +37,18 @@ export class UnverifiedClient {
       this.baseURL = this.baseURL || `https://${routerAddress}/v1/`;
     }
 
-    this._fetch = createEncryptedBodyFetch(this.baseURL!, undefined, this.enclaveURL);
+    // Ensure baseURL is always initialized before calling createEncryptedBodyFetch
+    if (!this.baseURL) {
+      if (this.enclaveURL) {
+        // If enclaveURL is provided but baseURL is not, derive baseURL from enclaveURL
+        const enclaveUrl = new URL(this.enclaveURL);
+        this.baseURL = `${enclaveUrl.origin}/v1/`;
+      } else {
+        throw new Error("Unable to determine baseURL: neither baseURL nor enclaveURL provided");
+      }
+    }
+
+    this._fetch = createEncryptedBodyFetch(this.baseURL, undefined, this.enclaveURL);
   }
 
   public async getVerificationDocument(): Promise<void> {

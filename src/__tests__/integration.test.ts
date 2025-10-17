@@ -280,5 +280,45 @@ describe("Examples Integration Tests", () => {
         "Streaming completion should produce content",
       );
     });
+
+    it("should initialize correctly when enclaveURL is provided but baseURL is not", async () => {
+      const { UnverifiedClient } = await import("../unverified-client");
+      
+      // Create a client with only enclaveURL, no baseURL
+      const client = new UnverifiedClient({
+        enclaveURL: "https://example-enclave.com"
+      });
+
+      // This should not throw an error
+      await client.ready();
+      
+      // Verify the client is properly initialized
+      assert.ok(client, "Client should be created");
+      assert.ok(client.fetch, "Client should have a fetch function");
+    });
+
+    it("SecureClient should initialize correctly when enclaveURL is provided but baseURL is not", async () => {
+      const { SecureClient } = await import("../secure-client");
+      
+      // Create a client with only enclaveURL, no baseURL
+      const client = new SecureClient({
+        enclaveURL: "https://example-enclave.com"
+      });
+
+      // This should not throw an error during initialization (before verification)
+      // Note: This will fail during verification since it's not a real enclave,
+      // but the baseURL initialization should work
+      try {
+        await client.ready();
+      } catch (error) {
+        // Expected to fail during verification, but not due to baseURL being undefined
+        assert.ok((error as Error).message.includes("verify") || (error as Error).message.includes("fetch"), 
+          "Should fail during verification, not baseURL initialization");
+      }
+      
+      // Verify the client is properly created
+      assert.ok(client, "Client should be created");
+      assert.ok(client.fetch, "Client should have a fetch function");
+    });
   });
 });
