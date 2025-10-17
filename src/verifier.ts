@@ -305,8 +305,10 @@ export class Verifier {
   protected readonly configRepo: string;
 
   constructor(options?: { serverURL?: string; configRepo?: string }) {
-    const serverURL = options?.serverURL ?? TINFOIL_CONFIG.INFERENCE_BASE_URL;
-    this.serverURL = new URL(serverURL).hostname;
+    if (!options?.serverURL) {
+      throw new Error("serverURL is required for Verifier");
+    }
+    this.serverURL = new URL(options.serverURL).hostname;
     this.configRepo = options?.configRepo ?? TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
   }
 

@@ -2,6 +2,7 @@ import { Verifier } from "./verifier";
 import type { VerificationDocument } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
 import { createSecureFetch } from "tinfoil/secure-fetch";
+import { fetchRouter } from "./router";
 
 interface SecureClientOptions {
   baseURL?: string;
@@ -14,13 +15,13 @@ export class SecureClient {
   private verificationDocument: VerificationDocument | null = null;
   private _fetch: typeof fetch | null = null;
   
-  private readonly baseURL?: string;
-  private readonly enclaveURL?: string;
+  private baseURL?: string;
+  private enclaveURL?: string;
   private readonly configRepo?: string;
 
   constructor(options: SecureClientOptions = {}) {
-    this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
-    this.enclaveURL = options.enclaveURL || TINFOIL_CONFIG.ENCLAVE_URL;
+    this.baseURL = options.baseURL;
+    this.enclaveURL = options.enclaveURL;
     this.configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
   }
 
@@ -32,6 +33,13 @@ export class SecureClient {
   }
 
   private async initSecureClient(): Promise<void> {
+    // Fetch router if no enclaveURL is provided
+    if (!this.enclaveURL) {
+      const routerAddress = await fetchRouter();
+      this.enclaveURL = `https://${routerAddress}`;
+      this.baseURL = this.baseURL || `https://${routerAddress}/v1/`;
+    }
+
     const verifier = new Verifier({
       serverURL: this.enclaveURL,
       configRepo: this.configRepo,
@@ -94,6 +102,10 @@ export class SecureClient {
       throw new Error("Verification document unavailable: client not verified yet");
     }
     return this.verificationDocument;
+  }
+
+  public getBaseURL(): string | undefined {
+    return this.baseURL;
   }
 
   get fetch(): typeof fetch {

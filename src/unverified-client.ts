@@ -1,5 +1,6 @@
 import { TINFOIL_CONFIG } from "./config";
 import { createEncryptedBodyFetch } from "./encrypted-body-fetch";
+import { fetchRouter } from "./router";
 
 interface UnverifiedClientOptions {
   baseURL?: string;
@@ -11,13 +12,13 @@ export class UnverifiedClient {
   private initPromise: Promise<void> | null = null;
   private _fetch: typeof fetch | null = null;
   
-  private readonly baseURL: string;
-  private readonly enclaveURL: string;
+  private baseURL?: string;
+  private enclaveURL?: string;
   private readonly configRepo: string;
 
   constructor(options: UnverifiedClientOptions = {}) {
-    this.baseURL = options.baseURL || TINFOIL_CONFIG.INFERENCE_BASE_URL;
-    this.enclaveURL = options.enclaveURL || TINFOIL_CONFIG.ENCLAVE_URL;
+    this.baseURL = options.baseURL;
+    this.enclaveURL = options.enclaveURL;
     this.configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
   }
 
@@ -29,7 +30,14 @@ export class UnverifiedClient {
   }
 
   private async initUnverifiedClient(): Promise<void> {
-    this._fetch = createEncryptedBodyFetch(this.baseURL, undefined, this.enclaveURL);
+    // Fetch router if no enclaveURL is provided
+    if (!this.enclaveURL) {
+      const routerAddress = await fetchRouter();
+      this.enclaveURL = `https://${routerAddress}`;
+      this.baseURL = this.baseURL || `https://${routerAddress}/v1/`;
+    }
+
+    this._fetch = createEncryptedBodyFetch(this.baseURL!, undefined, this.enclaveURL);
   }
 
   public async getVerificationDocument(): Promise<void> {
