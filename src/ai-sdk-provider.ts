@@ -29,7 +29,7 @@ export async function createTinfoilAI(apiKey: string, options: CreateTinfoilAIOp
 
   return createOpenAICompatible({
     name: "tinfoil",
-    baseURL: finalBaseURL.replace(/\/$/, ""),
+    baseURL: finalBaseURL,
     apiKey: apiKey,
     fetch: secureClient.fetch,
   });
