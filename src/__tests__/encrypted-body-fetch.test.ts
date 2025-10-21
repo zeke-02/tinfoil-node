@@ -5,7 +5,6 @@ import {
   normalizeEncryptedBodyRequestArgs,
   getHPKEKey,
   createEncryptedBodyFetch,
-  resetTransport,
 } from "../encrypted-body-fetch";
 import { Identity, PROTOCOL } from "@zeke-02/ehbp";
 
@@ -147,8 +146,7 @@ describe("encrypted-body-fetch", () => {
     let originalFetch: typeof globalThis.__TINFOIL_TEST_FETCH__;
 
     beforeEach(() => {
-      originalFetch = globalThis.__TINFOIL_TEST_FETCH__;
-      resetTransport();
+      originalFetch = globalThis.fetch;
     });
 
     it("rejects request when HPKE key mismatch occurs", async (t) => {
