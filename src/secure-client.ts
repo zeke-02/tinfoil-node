@@ -1,7 +1,7 @@
 import { Verifier } from "./verifier";
 import type { VerificationDocument } from "./verifier";
 import { TINFOIL_CONFIG } from "./config";
-import { createSecureFetch } from "tinfoil/secure-fetch";
+import { createSecureFetch } from "./secure-fetch";
 
 interface SecureClientOptions {
   baseURL?: string;
@@ -13,7 +13,7 @@ export class SecureClient {
   private initPromise: Promise<void> | null = null;
   private verificationDocument: VerificationDocument | null = null;
   private _fetch: typeof fetch | null = null;
-  
+
   private readonly baseURL?: string;
   private readonly enclaveURL?: string;
   private readonly configRepo?: string;
@@ -41,19 +41,27 @@ export class SecureClient {
       await verifier.verify();
       const doc = verifier.getVerificationDocument();
       if (!doc) {
-        throw new Error("Verification document not available after successful verification");
+        throw new Error(
+          "Verification document not available after successful verification"
+        );
       }
       this.verificationDocument = doc;
 
       // Extract keys from the verification document
-      const { hpkePublicKey, tlsPublicKeyFingerprint } = this.verificationDocument.enclaveMeasurement;
+      const { hpkePublicKey, tlsPublicKeyFingerprint } =
+        this.verificationDocument.enclaveMeasurement;
 
       try {
-        this._fetch = createSecureFetch(this.baseURL!, this.enclaveURL, hpkePublicKey, tlsPublicKeyFingerprint);
+        this._fetch = createSecureFetch(
+          this.baseURL!,
+          this.enclaveURL,
+          hpkePublicKey,
+          tlsPublicKeyFingerprint
+        );
       } catch (transportError) {
         this.verificationDocument.steps.createTransport = {
-          status: 'failed',
-          error: (transportError as Error).message
+          status: "failed",
+          error: (transportError as Error).message,
         };
         this.verificationDocument.securityVerified = false;
         throw transportError;
@@ -66,17 +74,17 @@ export class SecureClient {
         this.verificationDocument = {
           configRepo: this.configRepo!,
           enclaveHost: new URL(this.enclaveURL!).hostname,
-          releaseDigest: '',
-          codeMeasurement: { type: '', registers: [] },
-          enclaveMeasurement: { measurement: { type: '', registers: [] } },
+          releaseDigest: "",
+          codeMeasurement: { type: "", registers: [] },
+          enclaveMeasurement: { measurement: { type: "", registers: [] } },
           securityVerified: false,
           steps: {
-            fetchDigest: { status: 'pending' },
-            verifyCode: { status: 'pending' },
-            verifyEnclave: { status: 'pending' },
-            compareMeasurements: { status: 'pending' },
-            otherError: { status: 'failed', error: (error as Error).message }
-          }
+            fetchDigest: { status: "pending" },
+            verifyCode: { status: "pending" },
+            verifyEnclave: { status: "pending" },
+            compareMeasurements: { status: "pending" },
+            otherError: { status: "failed", error: (error as Error).message },
+          },
         };
       }
       throw error;
@@ -91,7 +99,9 @@ export class SecureClient {
     await this.initPromise!.catch(() => {});
 
     if (!this.verificationDocument) {
-      throw new Error("Verification document unavailable: client not verified yet");
+      throw new Error(
+        "Verification document unavailable: client not verified yet"
+      );
     }
     return this.verificationDocument;
   }
@@ -106,28 +116,31 @@ export class SecureClient {
         if (this.verificationDocument) {
           const errorMessage = (error as Error).message;
 
-          if (errorMessage.includes('HPKE public key mismatch')) {
+          if (errorMessage.includes("HPKE public key mismatch")) {
             this.verificationDocument.steps.verifyHPKEKey = {
-              status: 'failed',
-              error: errorMessage
+              status: "failed",
+              error: errorMessage,
             };
             this.verificationDocument.securityVerified = false;
-          } else if (errorMessage.includes('Transport initialization failed') || errorMessage.includes('Request initialization failed')) {
+          } else if (
+            errorMessage.includes("Transport initialization failed") ||
+            errorMessage.includes("Request initialization failed")
+          ) {
             this.verificationDocument.steps.createTransport = {
-              status: 'failed',
-              error: errorMessage
+              status: "failed",
+              error: errorMessage,
             };
             this.verificationDocument.securityVerified = false;
-          } else if (errorMessage.includes('Failed to get HPKE key')) {
+          } else if (errorMessage.includes("Failed to get HPKE key")) {
             this.verificationDocument.steps.verifyHPKEKey = {
-              status: 'failed',
-              error: errorMessage
+              status: "failed",
+              error: errorMessage,
             };
             this.verificationDocument.securityVerified = false;
           } else {
             this.verificationDocument.steps.otherError = {
-              status: 'failed',
-              error: errorMessage
+              status: "failed",
+              error: errorMessage,
             };
             this.verificationDocument.securityVerified = false;
           }

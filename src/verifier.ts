@@ -51,20 +51,7 @@
  * - `suppressWasmLogs(suppress?)` → control WASM log output
  */
 import { TINFOIL_CONFIG } from "./config";
-
-// Use native fetch and TextEncoder/TextDecoder
-// In Node.js, these are available globally since v18
-// In browsers, they're also available globally
-let cachedFetch: typeof fetch | null = null;
-function getFetch(): typeof fetch {
-  if (!cachedFetch) {
-    if (typeof globalThis.fetch !== "function") {
-      throw new Error("fetch is not available in this environment");
-    }
-    cachedFetch = globalThis.fetch.bind(globalThis);
-  }
-  return cachedFetch;
-}
+import { getFetch } from "./fetch-adapter";
 
 let cachedTextEncoder: typeof TextEncoder | null = null;
 function getTextEncoder(): typeof TextEncoder {
@@ -109,12 +96,14 @@ export interface AttestationMeasurement {
 // Platform type constants
 // See https://github.com/tinfoilsh/verifier/
 const PLATFORM_TYPES = {
-  SNP_TDX_MULTI_PLATFORM_V1: "https://tinfoil.sh/predicate/snp-tdx-multiplatform/v1",
+  SNP_TDX_MULTI_PLATFORM_V1:
+    "https://tinfoil.sh/predicate/snp-tdx-multiplatform/v1",
   TDX_GUEST_V1: "https://tinfoil.sh/predicate/tdx-guest/v1",
   TDX_GUEST_V2: "https://tinfoil.sh/predicate/tdx-guest/v2",
   SEV_GUEST_V1: "https://tinfoil.sh/predicate/sev-snp-guest/v1",
   SEV_GUEST_V2: "https://tinfoil.sh/predicate/sev-snp-guest/v2",
-  HARDWARE_MEASUREMENTS_V1: "https://tinfoil.sh/predicate/hardware-measurements/v1",
+  HARDWARE_MEASUREMENTS_V1:
+    "https://tinfoil.sh/predicate/hardware-measurements/v1",
 } as const;
 
 const MEASUREMENT_ERROR_MESSAGES = {
@@ -124,7 +113,8 @@ const MEASUREMENT_ERROR_MESSAGES = {
   RTMR2_MISMATCH: "RTMR2 mismatch",
   FEW_REGISTERS: "fewer registers than expected",
   MULTI_PLATFORM_MISMATCH: "multi-platform measurement mismatch",
-  MULTI_PLATFORM_SEV_SNP_MISMATCH: "multi-platform SEV-SNP measurement mismatch",
+  MULTI_PLATFORM_SEV_SNP_MISMATCH:
+    "multi-platform SEV-SNP measurement mismatch",
 } as const;
 
 /**
@@ -141,7 +131,7 @@ export interface AttestationResponse {
  * State of an intermediate verification step
  */
 export interface VerificationStepState {
-  status: 'pending' | 'success' | 'failed';
+  status: "pending" | "success" | "failed";
   error?: string;
 }
 
@@ -176,13 +166,15 @@ function registersEqual(a: string[], b: string[]): boolean {
 
 function compareMeasurementsError(
   codeMeasurement: AttestationMeasurement,
-  runtimeMeasurement: AttestationMeasurement,
+  runtimeMeasurement: AttestationMeasurement
 ): Error | null {
   if (
     codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1 &&
     runtimeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1
   ) {
-    if (!registersEqual(codeMeasurement.registers, runtimeMeasurement.registers)) {
+    if (
+      !registersEqual(codeMeasurement.registers, runtimeMeasurement.registers)
+    ) {
       return new Error(MEASUREMENT_ERROR_MESSAGES.MULTI_PLATFORM_MISMATCH);
     }
     return null;
@@ -195,7 +187,10 @@ function compareMeasurementsError(
   if (codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
     switch (runtimeMeasurement.type) {
       case PLATFORM_TYPES.TDX_GUEST_V1: {
-        if (codeMeasurement.registers.length < 3 || runtimeMeasurement.registers.length < 4) {
+        if (
+          codeMeasurement.registers.length < 3 ||
+          runtimeMeasurement.registers.length < 4
+        ) {
           return new Error(MEASUREMENT_ERROR_MESSAGES.FEW_REGISTERS);
         }
 
@@ -215,7 +210,10 @@ function compareMeasurementsError(
 
       case PLATFORM_TYPES.SEV_GUEST_V1:
       case PLATFORM_TYPES.SEV_GUEST_V2: {
-        if (codeMeasurement.registers.length < 1 || runtimeMeasurement.registers.length < 1) {
+        if (
+          codeMeasurement.registers.length < 1 ||
+          runtimeMeasurement.registers.length < 1
+        ) {
           return new Error(MEASUREMENT_ERROR_MESSAGES.FEW_REGISTERS);
         }
 
@@ -223,14 +221,16 @@ function compareMeasurementsError(
         const actualSevSnp = runtimeMeasurement.registers[0];
 
         if (expectedSevSnp !== actualSevSnp) {
-          return new Error(MEASUREMENT_ERROR_MESSAGES.MULTI_PLATFORM_SEV_SNP_MISMATCH);
+          return new Error(
+            MEASUREMENT_ERROR_MESSAGES.MULTI_PLATFORM_SEV_SNP_MISMATCH
+          );
         }
         return null;
       }
 
       default:
         return new Error(
-          `unsupported enclave platform for multi-platform code measurements: ${runtimeMeasurement.type}`,
+          `unsupported enclave platform for multi-platform code measurements: ${runtimeMeasurement.type}`
         );
     }
   }
@@ -239,7 +239,9 @@ function compareMeasurementsError(
     return new Error(MEASUREMENT_ERROR_MESSAGES.FORMAT_MISMATCH);
   }
 
-  if (!registersEqual(codeMeasurement.registers, runtimeMeasurement.registers)) {
+  if (
+    !registersEqual(codeMeasurement.registers, runtimeMeasurement.registers)
+  ) {
     return new Error(MEASUREMENT_ERROR_MESSAGES.MEASUREMENT_MISMATCH);
   }
 
@@ -253,7 +255,7 @@ export interface MeasurementComparisonResult {
 
 export function compareMeasurementsDetailed(
   codeMeasurement: AttestationMeasurement,
-  runtimeMeasurement: AttestationMeasurement,
+  runtimeMeasurement: AttestationMeasurement
 ): MeasurementComparisonResult {
   const error = compareMeasurementsError(codeMeasurement, runtimeMeasurement);
   if (error) {
@@ -263,25 +265,24 @@ export function compareMeasurementsDetailed(
 }
 
 /**
-* Compare two measurements according to platform-specific rules
-* This is predicate function for comparing attestation measurements
-* taken from https://github.com/tinfoilsh/verifier/blob/main/attestation/attestation.go
-* 
-* @param codeMeasurement - Expected measurement from code attestation
-* @param runtimeMeasurement - Actual measurement from runtime attestation
-* @returns true if measurements match according to platform rules
-*/
+ * Compare two measurements according to platform-specific rules
+ * This is predicate function for comparing attestation measurements
+ * taken from https://github.com/tinfoilsh/verifier/blob/main/attestation/attestation.go
+ *
+ * @param codeMeasurement - Expected measurement from code attestation
+ * @param runtimeMeasurement - Actual measurement from runtime attestation
+ * @returns true if measurements match according to platform rules
+ */
 export function compareMeasurements(
   codeMeasurement: AttestationMeasurement,
-  runtimeMeasurement: AttestationMeasurement,
+  runtimeMeasurement: AttestationMeasurement
 ): boolean {
   return compareMeasurementsError(codeMeasurement, runtimeMeasurement) === null;
 }
 
-
 /**
  * Verifier performs attestation verification for Tinfoil enclaves
- * 
+ *
  * The verifier loads a WebAssembly module that:
  * 1. Fetches the latest code release digest from GitHub
  * 2. Performs runtime attestation against the enclave
@@ -293,7 +294,9 @@ export class Verifier {
   private static initializationPromise: Promise<void> | null = null;
   private static readonly defaultWasmUrl =
     "https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm";
-  public static originalFsWriteSync: ((fd: number, buf: Uint8Array) => number) | null = null;
+  public static originalFsWriteSync:
+    | ((fd: number, buf: Uint8Array) => number)
+    | null = null;
   public static wasmLogsSuppressed = true;
   public static globalsInitialized = false;
 
@@ -307,7 +310,8 @@ export class Verifier {
   constructor(options?: { serverURL?: string; configRepo?: string }) {
     const serverURL = options?.serverURL ?? TINFOIL_CONFIG.INFERENCE_BASE_URL;
     this.serverURL = new URL(serverURL).hostname;
-    this.configRepo = options?.configRepo ?? TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
+    this.configRepo =
+      options?.configRepo ?? TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
   }
 
   /**
@@ -323,13 +327,15 @@ export class Verifier {
     const fetchFn = getFetch();
     const wasmResponse = await fetchFn(Verifier.defaultWasmUrl);
     if (!wasmResponse.ok) {
-      throw new Error(`Failed to fetch WASM: ${wasmResponse.status} ${wasmResponse.statusText}`);
+      throw new Error(
+        `Failed to fetch WASM: ${wasmResponse.status} ${wasmResponse.statusText}`
+      );
     }
 
     const wasmBuffer = await wasmResponse.arrayBuffer();
     const result = await WebAssembly.instantiate(
       wasmBuffer,
-      goInstance.importObject,
+      goInstance.importObject
     );
 
     // Start the Go instance in the background
@@ -337,14 +343,19 @@ export class Verifier {
     goInstance.run(result.instance);
 
     // Wait for WASM functions to be available
-    await new Promise(resolve => setTimeout(resolve, 100));
-    if (typeof globalThis.verifyCode === "undefined" || typeof globalThis.verifyEnclave === "undefined") {
-      await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    if (
+      typeof globalThis.verifyCode === "undefined" ||
+      typeof globalThis.verifyEnclave === "undefined"
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
     // Apply log suppression if requested
     if (Verifier.wasmLogsSuppressed && (globalThis as any).fs?.writeSync) {
-      const fsObj = (globalThis as any).fs as { writeSync: (fd: number, buf: Uint8Array) => number };
+      const fsObj = (globalThis as any).fs as {
+        writeSync: (fd: number, buf: Uint8Array) => number;
+      };
       if (!Verifier.originalFsWriteSync) {
         Verifier.originalFsWriteSync = fsObj.writeSync.bind(fsObj);
       }
@@ -366,7 +377,7 @@ export class Verifier {
         goInstance._scheduledTimeouts.clear();
       }
 
-      if (typeof goInstance.exit === 'function') {
+      if (typeof goInstance.exit === "function") {
         try {
           goInstance.exit(0);
         } catch (e) {
@@ -389,7 +400,7 @@ export class Verifier {
     // Sigstore transparency logs (Rekor). Using the proxy therefore does not
     // weaken security.
     const targetRepo = configRepo || this.configRepo;
-    
+
     const fetchFn = getFetch();
     const releaseResponse = await fetchFn(
       `https://api-github-proxy.tinfoil.sh/repos/${targetRepo}/releases/latest`,
@@ -398,12 +409,12 @@ export class Verifier {
           Accept: "application/vnd.github.v3+json",
           "User-Agent": "tinfoil-node-client",
         },
-      },
+      }
     );
 
     if (!releaseResponse.ok) {
       throw new Error(
-        `GitHub API request failed: ${releaseResponse.status} ${releaseResponse.statusText}`,
+        `GitHub API request failed: ${releaseResponse.status} ${releaseResponse.statusText}`
       );
     }
 
@@ -422,13 +433,15 @@ export class Verifier {
 
     return digest;
   }
-  
+
   /**
    * Perform runtime attestation on the enclave
    * @param enclaveHost - The enclave hostname
    * @returns Attestation response with measurement and keys
    */
-  public async verifyEnclave(enclaveHost?: string): Promise<AttestationResponse> {
+  public async verifyEnclave(
+    enclaveHost?: string
+  ): Promise<AttestationResponse> {
     // Expose errors via explicit Promise rejection and add a timeout
     return new Promise(async (resolve, reject) => {
       try {
@@ -444,8 +457,11 @@ export class Verifier {
         try {
           const timeoutPromise = new Promise((_, timeoutReject) => {
             timeoutHandle = setTimeout(
-              () => timeoutReject(new Error("WASM verifyEnclave timed out after 10 seconds")),
-              10000,
+              () =>
+                timeoutReject(
+                  new Error("WASM verifyEnclave timed out after 10 seconds")
+                ),
+              10000
             );
           });
 
@@ -453,7 +469,7 @@ export class Verifier {
             (globalThis as any).verifyEnclave(targetHost),
             timeoutPromise,
           ]);
-          
+
           // Clear timeout on success
           if (timeoutHandle !== undefined) {
             clearTimeout(timeoutHandle);
@@ -469,8 +485,15 @@ export class Verifier {
 
         // Validate required fields - fail fast with explicit rejection
         // At least one key must be present (TLS or HPKE)
-        if (!attestationResponse?.tls_public_key && !attestationResponse?.hpke_public_key) {
-          reject(new Error("Missing both tls_public_key and hpke_public_key in attestation response"));
+        if (
+          !attestationResponse?.tls_public_key &&
+          !attestationResponse?.hpke_public_key
+        ) {
+          reject(
+            new Error(
+              "Missing both tls_public_key and hpke_public_key in attestation response"
+            )
+          );
           return;
         }
 
@@ -481,7 +504,9 @@ export class Verifier {
             attestationResponse.measurement &&
             typeof attestationResponse.measurement === "string"
           ) {
-            parsedRuntimeMeasurement = JSON.parse(attestationResponse.measurement);
+            parsedRuntimeMeasurement = JSON.parse(
+              attestationResponse.measurement
+            );
           } else if (
             attestationResponse.measurement &&
             typeof attestationResponse.measurement === "object"
@@ -492,7 +517,9 @@ export class Verifier {
             return;
           }
         } catch (parseError) {
-          reject(new Error(`Failed to parse runtime measurement: ${parseError}`));
+          reject(
+            new Error(`Failed to parse runtime measurement: ${parseError}`)
+          );
           return;
         }
 
@@ -514,33 +541,38 @@ export class Verifier {
       }
     });
   }
-  
+
   /**
    * Perform code attestation
    * @param configRepo - Repository name
    * @param digest - Code digest hash
    * @returns Code measurement
    */
-  public async verifyCode(configRepo: string, digest: string): Promise<{ measurement: AttestationMeasurement }> {
+  public async verifyCode(
+    configRepo: string,
+    digest: string
+  ): Promise<{ measurement: AttestationMeasurement }> {
     if (typeof globalThis.verifyCode !== "function") {
       throw new Error("WASM verifyCode function not available");
     }
-    
+
     const rawMeasurement = await globalThis.verifyCode(configRepo, digest);
 
     const normalizedMeasurement =
-      typeof rawMeasurement === 'string'
+      typeof rawMeasurement === "string"
         ? (() => {
             try {
               return JSON.parse(rawMeasurement) as unknown;
             } catch (error) {
-              throw new Error(`Invalid code measurement format: ${(error as Error).message}`);
+              throw new Error(
+                `Invalid code measurement format: ${(error as Error).message}`
+              );
             }
           })()
         : rawMeasurement;
 
-    if (!normalizedMeasurement || typeof normalizedMeasurement !== 'object') {
-      throw new Error('Invalid code measurement format');
+    if (!normalizedMeasurement || typeof normalizedMeasurement !== "object") {
+      throw new Error("Invalid code measurement format");
     }
 
     const measurementObject = normalizedMeasurement as {
@@ -548,15 +580,18 @@ export class Verifier {
       registers?: unknown;
     };
 
-    if (typeof measurementObject.type !== 'string' || !Array.isArray(measurementObject.registers)) {
-      throw new Error('Invalid code measurement format');
+    if (
+      typeof measurementObject.type !== "string" ||
+      !Array.isArray(measurementObject.registers)
+    ) {
+      throw new Error("Invalid code measurement format");
     }
 
     const parsedCodeMeasurement: AttestationMeasurement = {
       type: measurementObject.type,
-      registers: measurementObject.registers.map((value) => String(value))
+      registers: measurementObject.registers.map((value) => String(value)),
     };
-    
+
     return { measurement: parsedCodeMeasurement };
   }
 
@@ -584,11 +619,11 @@ export class Verifier {
    * Internal verification logic that runs within WASM context
    */
   private async verifyInternal(): Promise<AttestationResponse> {
-    const steps: VerificationDocument['steps'] = {
-      fetchDigest: { status: 'pending' },
-      verifyCode: { status: 'pending' },
-      verifyEnclave: { status: 'pending' },
-      compareMeasurements: { status: 'pending' },
+    const steps: VerificationDocument["steps"] = {
+      fetchDigest: { status: "pending" },
+      verifyCode: { status: "pending" },
+      verifyEnclave: { status: "pending" },
+      compareMeasurements: { status: "pending" },
     };
 
     let releaseDigest: string;
@@ -597,15 +632,15 @@ export class Verifier {
 
     try {
       releaseDigest = await this.fetchLatestDigest(this.configRepo);
-      steps.fetchDigest = { status: 'success' };
+      steps.fetchDigest = { status: "success" };
     } catch (error) {
-      steps.fetchDigest = { status: 'failed', error: (error as Error).message };
+      steps.fetchDigest = { status: "failed", error: (error as Error).message };
       this.lastVerificationDocument = {
         configRepo: this.configRepo,
         enclaveHost: this.serverURL,
-        releaseDigest: '',
-        codeMeasurement: { type: '', registers: [] },
-        enclaveMeasurement: { measurement: { type: '', registers: [] } },
+        releaseDigest: "",
+        codeMeasurement: { type: "", registers: [] },
+        enclaveMeasurement: { measurement: { type: "", registers: [] } },
         securityVerified: false,
         steps,
       };
@@ -616,21 +651,27 @@ export class Verifier {
       const results = await Promise.all([
         this.verifyCode(this.configRepo, releaseDigest).then(
           (result) => {
-            steps.verifyCode = { status: 'success' };
+            steps.verifyCode = { status: "success" };
             return result;
           },
           (error) => {
-            steps.verifyCode = { status: 'failed', error: (error as Error).message };
+            steps.verifyCode = {
+              status: "failed",
+              error: (error as Error).message,
+            };
             throw error;
           }
         ),
         this.verifyEnclave(this.serverURL).then(
           (result) => {
-            steps.verifyEnclave = { status: 'success' };
+            steps.verifyEnclave = { status: "success" };
             return result;
           },
           (error) => {
-            steps.verifyEnclave = { status: 'failed', error: (error as Error).message };
+            steps.verifyEnclave = {
+              status: "failed",
+              error: (error as Error).message,
+            };
             throw error;
           }
         ),
@@ -651,10 +692,16 @@ export class Verifier {
       throw error;
     }
 
-    const measurementsMatchError = compareMeasurementsError(codeMeasurement, attestation.measurement);
+    const measurementsMatchError = compareMeasurementsError(
+      codeMeasurement,
+      attestation.measurement
+    );
 
     if (measurementsMatchError) {
-      steps.compareMeasurements = { status: 'failed', error: measurementsMatchError.message };
+      steps.compareMeasurements = {
+        status: "failed",
+        error: measurementsMatchError.message,
+      };
       this.lastVerificationDocument = {
         configRepo: this.configRepo,
         enclaveHost: this.serverURL,
@@ -666,11 +713,11 @@ export class Verifier {
       };
       throw new Error(
         `Verification failed: measurements did not match.\nCode measurement (${codeMeasurement.type}: ${codeMeasurement.registers})\n` +
-        `Runtime measurement (${attestation.measurement.type}: ${attestation.measurement.registers}:)\n ${measurementsMatchError.message}`
+          `Runtime measurement (${attestation.measurement.type}: ${attestation.measurement.registers}:)\n ${measurementsMatchError.message}`
       );
     }
 
-    steps.compareMeasurements = { status: 'success' };
+    steps.compareMeasurements = { status: "success" };
 
     this.lastVerificationDocument = {
       configRepo: this.configRepo,
@@ -705,7 +752,8 @@ function shouldAutoInitializeWasm(): boolean {
   };
 
   const env = globalAny.process?.env;
-  const autoInitFlag = env?.TINFOIL_SKIP_WASM_AUTO_INIT ?? env?.TINFOIL_DISABLE_WASM_AUTO_INIT;
+  const autoInitFlag =
+    env?.TINFOIL_SKIP_WASM_AUTO_INIT ?? env?.TINFOIL_DISABLE_WASM_AUTO_INIT;
   if (typeof autoInitFlag === "string") {
     const normalized = autoInitFlag.toLowerCase();
     if (normalized === "1" || normalized === "true") {
@@ -722,23 +770,27 @@ function shouldAutoInitializeWasm(): boolean {
     return false;
   }
 
-  const hasBrowserGlobals = typeof globalAny.window === "object" && typeof globalAny.document === "object";
+  const hasBrowserGlobals =
+    typeof globalAny.window === "object" &&
+    typeof globalAny.document === "object";
   return hasBrowserGlobals;
 }
 
 /**
  * Control WASM log output
- * 
+ *
  * The Go WASM runtime outputs logs through a polyfilled fs.writeSync.
  * This function allows suppressing those logs without affecting other console output.
- * 
+ *
  * @param suppress - Whether to suppress WASM logs (default: true)
  */
 export function suppressWasmLogs(suppress = true): void {
   (globalThis as any).__tinfoilSuppressWasmLogs = suppress;
   Verifier.wasmLogsSuppressed = suppress;
 
-  const fsObj = (globalThis as any).fs as { writeSync: (fd: number, buf: Uint8Array) => number } | undefined;
+  const fsObj = (globalThis as any).fs as
+    | { writeSync: (fd: number, buf: Uint8Array) => number }
+    | undefined;
   if (!fsObj || typeof fsObj.writeSync !== "function") return;
 
   if (suppress) {
@@ -780,13 +832,17 @@ async function initializeWasmGlobals(): Promise<void> {
     };
   } else {
     root.performance.now = root.performance.now ?? (() => Date.now());
-    root.performance.markResourceTiming = root.performance.markResourceTiming ?? (() => {});
+    root.performance.markResourceTiming =
+      root.performance.markResourceTiming ?? (() => {});
     root.performance.mark = root.performance.mark ?? (() => {});
     root.performance.measure = root.performance.measure ?? (() => {});
     root.performance.clearMarks = root.performance.clearMarks ?? (() => {});
-    root.performance.clearMeasures = root.performance.clearMeasures ?? (() => {});
-    root.performance.getEntriesByName = root.performance.getEntriesByName ?? (() => []);
-    root.performance.getEntriesByType = root.performance.getEntriesByType ?? (() => []);
+    root.performance.clearMeasures =
+      root.performance.clearMeasures ?? (() => {});
+    root.performance.getEntriesByName =
+      root.performance.getEntriesByName ?? (() => []);
+    root.performance.getEntriesByType =
+      root.performance.getEntriesByType ?? (() => []);
     root.performance.getEntries = root.performance.getEntries ?? (() => []);
   }
 
@@ -808,7 +864,11 @@ async function initializeWasmGlobals(): Promise<void> {
 
   // Force process to stay running (prevent Go from exiting Node process)
   // This is a common issue with Go WASM in Node - it calls process.exit()
-  if (root.process && typeof root.process.exit === "function" && !root.__tinfoilProcessExitPatched) {
+  if (
+    root.process &&
+    typeof root.process.exit === "function" &&
+    !root.__tinfoilProcessExitPatched
+  ) {
     root.__tinfoilProcessExitPatched = true;
     const originalExit = root.process.exit.bind(root.process);
     root.__tinfoilOriginalProcessExit = originalExit;
@@ -817,7 +877,9 @@ async function initializeWasmGlobals(): Promise<void> {
     // so callers can silence only the WASM-related noise while keeping application logs intact.
     root.process.exit = ((code?: number) => {
       if (!root.__tinfoilSuppressWasmLogs) {
-        console.log(`Process exit called with code ${code} - ignoring to keep runtime alive`);
+        console.log(
+          `Process exit called with code ${code} - ignoring to keep runtime alive`
+        );
       }
       return undefined as never;
     }) as any;
@@ -843,7 +905,9 @@ function ensureCrypto(root: Record<string, any>): void {
 
   const nodeRandomBytes = resolveNodeRandomBytes();
   if (!nodeRandomBytes) {
-    throw new Error("crypto.getRandomValues is not available in this environment");
+    throw new Error(
+      "crypto.getRandomValues is not available in this environment"
+    );
   }
 
   const fallbackCrypto = {
@@ -867,8 +931,12 @@ function ensureCrypto(root: Record<string, any>): void {
 }
 
 function resolveWindowCrypto(root: Record<string, any>): Crypto | undefined {
-  const maybeWindow = root.window ?? (typeof window !== "undefined" ? window : undefined);
-  if (maybeWindow?.crypto && typeof maybeWindow.crypto.getRandomValues === "function") {
+  const maybeWindow =
+    root.window ?? (typeof window !== "undefined" ? window : undefined);
+  if (
+    maybeWindow?.crypto &&
+    typeof maybeWindow.crypto.getRandomValues === "function"
+  ) {
     return maybeWindow.crypto;
   }
   return undefined;
@@ -880,8 +948,13 @@ function resolveNodeRandomBytes(): ((size: number) => Uint8Array) | undefined {
   }
 
   try {
-    const cryptoModule = nodeRequire("crypto") as { randomBytes?: (size: number) => Uint8Array } | undefined;
-    const randomBytes = typeof cryptoModule?.randomBytes === "function" ? cryptoModule.randomBytes : undefined;
+    const cryptoModule = nodeRequire("crypto") as
+      | { randomBytes?: (size: number) => Uint8Array }
+      | undefined;
+    const randomBytes =
+      typeof cryptoModule?.randomBytes === "function"
+        ? cryptoModule.randomBytes
+        : undefined;
     if (randomBytes) {
       return (size: number) => {
         const result = randomBytes(size);
@@ -908,7 +981,9 @@ function loadWasmExec(): Promise<void> {
           nodeRequire("./wasm-exec.js");
           return;
         }
-        throw new Error("Failed to load wasm-exec.js via dynamic import, and require() is unavailable");
+        throw new Error(
+          "Failed to load wasm-exec.js via dynamic import, and require() is unavailable"
+        );
       }
     })();
 

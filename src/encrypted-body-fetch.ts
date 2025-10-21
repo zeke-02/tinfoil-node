@@ -1,25 +1,27 @@
-import type { Transport as EhbpTransport } from "ehbp";
-import { Identity, Transport, PROTOCOL } from "ehbp";
+import type { Transport as EhbpTransport } from "@zeke-02/ehbp";
+import { Identity, Transport, PROTOCOL } from "@zeke-02/ehbp";
+import { getFetch } from "./fetch-adapter";
 
 let transport: Promise<EhbpTransport> | null = null;
 
 // Public API
-export async function getHPKEKey(enclaveURL: string) : Promise<CryptoKey> {
-  const url = new URL(enclaveURL);
-
+export async function getHPKEKey(enclaveURL: string): Promise<CryptoKey> {
   const keysURL = new URL(PROTOCOL.KEYS_PATH, enclaveURL);
 
-  if (keysURL.protocol !== 'https:') {
-    throw new Error(`HTTPS is required for remote key retrieval. Invalid protocol: ${keysURL.protocol}`);
+  if (keysURL.protocol !== "https:") {
+    throw new Error(
+      `HTTPS is required for remote key retrieval. Invalid protocol: ${keysURL.protocol}`
+    );
   }
 
-  const response = await fetch(keysURL.toString());
+  const fetchFn = getFetch();
+  const response = await fetchFn(keysURL.toString());
 
   if (!response.ok) {
     throw new Error(`Failed to get server public key: ${response.status}`);
   }
 
-  const contentType = response.headers.get('content-type');
+  const contentType = response.headers.get("content-type");
   if (contentType !== PROTOCOL.KEYS_MEDIA_TYPE) {
     throw new Error(`Invalid content type: ${contentType}`);
   }
@@ -31,7 +33,7 @@ export async function getHPKEKey(enclaveURL: string) : Promise<CryptoKey> {
 
 export function normalizeEncryptedBodyRequestArgs(
   input: RequestInfo | URL,
-  init?: RequestInit,
+  init?: RequestInit
 ): { url: string; init?: RequestInit } {
   if (typeof input === "string") {
     return { url: input, init };
@@ -61,19 +63,17 @@ export async function encryptedBodyRequest(
   input: RequestInfo | URL,
   hpkePublicKey?: string,
   init?: RequestInit,
-  enclaveURL?: string,
+  enclaveURL?: string
 ): Promise<Response> {
-  const { url: requestUrl, init: requestInit } = normalizeEncryptedBodyRequestArgs(
-    input,
-    init,
-  );
+  const { url: requestUrl, init: requestInit } =
+    normalizeEncryptedBodyRequestArgs(input, init);
 
   const u = new URL(requestUrl);
   const { origin } = u;
 
   const keyOrigin = enclaveURL ? new URL(enclaveURL).origin : origin;
 
-  if(!transport) {
+  if (!transport) {
     transport = getTransportForOrigin(origin, keyOrigin);
   }
 
@@ -83,19 +83,30 @@ export async function encryptedBodyRequest(
     const transportKeyHash = await transportInstance.getServerPublicKeyHex();
     if (transportKeyHash !== hpkePublicKey) {
       transport = null;
-      throw new Error(`HPKE public key mismatch. Expected: ${hpkePublicKey}, Got: ${transportKeyHash}`);
+      throw new Error(
+        `HPKE public key mismatch. Expected: ${hpkePublicKey}, Got: ${transportKeyHash}`
+      );
     }
   }
 
   return transportInstance.request(requestUrl, requestInit);
 }
 
-export function createEncryptedBodyFetch(baseURL: string, hpkePublicKey?: string, enclaveURL?: string): typeof fetch {
+export function createEncryptedBodyFetch(
+  baseURL: string,
+  hpkePublicKey?: string,
+  enclaveURL?: string
+): typeof fetch {
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const normalized = normalizeEncryptedBodyRequestArgs(input, init);
     const targetUrl = new URL(normalized.url, baseURL);
 
-    return encryptedBodyRequest(targetUrl.toString(), hpkePublicKey, normalized.init, enclaveURL);
+    return encryptedBodyRequest(
+      targetUrl.toString(),
+      hpkePublicKey,
+      normalized.init,
+      enclaveURL
+    );
   }) as typeof fetch;
 }
 
@@ -103,12 +114,19 @@ export function resetTransport(): void {
   transport = null;
 }
 
-async function getTransportForOrigin(origin: string, keyOrigin: string): Promise<EhbpTransport> {
-  if (typeof globalThis !== 'undefined') {
+async function getTransportForOrigin(
+  origin: string,
+  keyOrigin: string
+): Promise<EhbpTransport> {
+  if (typeof globalThis !== "undefined") {
     const isSecure = (globalThis as any).isSecureContext !== false;
-    const hasSubtle = !!(globalThis.crypto && (globalThis.crypto as Crypto).subtle);
+    const hasSubtle = !!(
+      globalThis.crypto && (globalThis.crypto as Crypto).subtle
+    );
     if (!isSecure || !hasSubtle) {
-      const reason = !isSecure ? 'insecure context (use HTTPS or localhost)' : 'missing WebCrypto SubtleCrypto';
+      const reason = !isSecure
+        ? "insecure context (use HTTPS or localhost)"
+        : "missing WebCrypto SubtleCrypto";
       throw new Error(`EHBP requires a secure browser context: ${reason}`);
     }
   }

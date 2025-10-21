@@ -14,9 +14,12 @@ describe("Verifier", () => {
     const fetchMock = t.mock.fn(async (input: RequestInfo) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
-        return new Response(JSON.stringify({ body: `Digest: \`${makeHex64()}\`` }), {
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ body: `Digest: \`${makeHex64()}\`` }),
+          {
+            headers: { "content-type": "application/json" },
+          }
+        );
       }
       return new Response(new Uint8Array([0x00]), {
         headers: { "content-type": "application/wasm" },
@@ -25,10 +28,16 @@ describe("Verifier", () => {
 
     const originalInstantiateStreaming = WebAssembly.instantiateStreaming;
     const originalInstantiate = WebAssembly.instantiate;
-    const originalFetch = globalThis.fetch;
-    (WebAssembly as any).instantiateStreaming = async () => ({ module: {}, instance: {} });
-    (WebAssembly as any).instantiate = async () => ({ module: {}, instance: {} });
-    globalThis.fetch = fetchMock as any;
+    const originalFetch = globalThis.__TINFOIL_TEST_FETCH__;
+    (WebAssembly as any).instantiateStreaming = async () => ({
+      module: {},
+      instance: {},
+    });
+    (WebAssembly as any).instantiate = async () => ({
+      module: {},
+      instance: {},
+    });
+    globalThis.__TINFOIL_TEST_FETCH__ = fetchMock as any;
 
     try {
       await withMockedModules(
@@ -47,7 +56,10 @@ describe("Verifier", () => {
             }
           };
           (globalThis as any).verifyEnclave = async (_h: string) => ({
-            measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1", "r2"] },
+            measurement: {
+              type: MOCK_MEASUREMENT_TYPE,
+              registers: ["r1", "r2"],
+            },
             tls_public_key: "tls-fp",
             hpke_public_key: "hpke-key",
           });
@@ -60,7 +72,7 @@ describe("Verifier", () => {
           const { Verifier } = await import("../verifier");
           const verifier = new Verifier({
             serverURL: "https://host/v1",
-            configRepo: "owner/repo"
+            configRepo: "owner/repo",
           });
 
           await verifier.verify();
@@ -72,16 +84,22 @@ describe("Verifier", () => {
           assert.strictEqual(doc!.steps.verifyEnclave.status, "success");
           assert.strictEqual(doc!.steps.verifyCode.status, "success");
           assert.strictEqual(doc!.steps.compareMeasurements.status, "success");
-          assert.deepStrictEqual(doc!.enclaveMeasurement.measurement, { type: MOCK_MEASUREMENT_TYPE, registers: ["r1", "r2"] });
-          assert.strictEqual(doc!.enclaveMeasurement.tlsPublicKeyFingerprint, "tls-fp");
+          assert.deepStrictEqual(doc!.enclaveMeasurement.measurement, {
+            type: MOCK_MEASUREMENT_TYPE,
+            registers: ["r1", "r2"],
+          });
+          assert.strictEqual(
+            doc!.enclaveMeasurement.tlsPublicKeyFingerprint,
+            "tls-fp"
+          );
           assert.strictEqual(doc!.enclaveMeasurement.hpkePublicKey, "hpke-key");
           assert.strictEqual(typeof doc!.releaseDigest, "string");
-        },
+        }
       );
     } finally {
       (WebAssembly as any).instantiateStreaming = originalInstantiateStreaming;
       (WebAssembly as any).instantiate = originalInstantiate;
-      globalThis.fetch = originalFetch;
+      globalThis.__TINFOIL_TEST_FETCH__ = originalFetch;
     }
   });
 
@@ -89,9 +107,12 @@ describe("Verifier", () => {
     const fetchMock = t.mock.fn(async (input: RequestInfo) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
-        return new Response(JSON.stringify({ body: `Digest: \`${makeHex64()}\`` }), {
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ body: `Digest: \`${makeHex64()}\`` }),
+          {
+            headers: { "content-type": "application/json" },
+          }
+        );
       }
       return new Response(new Uint8Array([0x00]), {
         headers: { "content-type": "application/wasm" },
@@ -100,10 +121,16 @@ describe("Verifier", () => {
 
     const originalInstantiateStreaming = WebAssembly.instantiateStreaming;
     const originalInstantiate = WebAssembly.instantiate;
-    const originalFetch = globalThis.fetch;
-    (WebAssembly as any).instantiateStreaming = async () => ({ module: {}, instance: {} });
-    (WebAssembly as any).instantiate = async () => ({ module: {}, instance: {} });
-    globalThis.fetch = fetchMock as any;
+    const originalFetch = globalThis.__TINFOIL_TEST_FETCH__;
+    (WebAssembly as any).instantiateStreaming = async () => ({
+      module: {},
+      instance: {},
+    });
+    (WebAssembly as any).instantiate = async () => ({
+      module: {},
+      instance: {},
+    });
+    globalThis.__TINFOIL_TEST_FETCH__ = fetchMock as any;
 
     try {
       await withMockedModules(
@@ -132,16 +159,19 @@ describe("Verifier", () => {
           const { Verifier } = await import("../verifier");
           const verifier = new Verifier({
             serverURL: "https://host/v1",
-            configRepo: "owner/repo"
+            configRepo: "owner/repo",
           });
 
-          await assert.rejects(() => verifier.verifyEnclave("host"), /Missing both tls_public_key and hpke_public_key/);
-        },
+          await assert.rejects(
+            () => verifier.verifyEnclave("host"),
+            /Missing both tls_public_key and hpke_public_key/
+          );
+        }
       );
     } finally {
       (WebAssembly as any).instantiateStreaming = originalInstantiateStreaming;
       (WebAssembly as any).instantiate = originalInstantiate;
-      globalThis.fetch = originalFetch;
+      globalThis.__TINFOIL_TEST_FETCH__ = originalFetch;
     }
   });
 
@@ -158,10 +188,16 @@ describe("Verifier", () => {
 
     const originalInstantiateStreaming = WebAssembly.instantiateStreaming;
     const originalInstantiate = WebAssembly.instantiate;
-    const originalFetch = globalThis.fetch;
-    (WebAssembly as any).instantiateStreaming = async () => ({ module: {}, instance: {} });
-    (WebAssembly as any).instantiate = async () => ({ module: {}, instance: {} });
-    globalThis.fetch = fetchMock as any;
+    const originalFetch = globalThis.__TINFOIL_TEST_FETCH__;
+    (WebAssembly as any).instantiateStreaming = async () => ({
+      module: {},
+      instance: {},
+    });
+    (WebAssembly as any).instantiate = async () => ({
+      module: {},
+      instance: {},
+    });
+    globalThis.__TINFOIL_TEST_FETCH__ = fetchMock as any;
 
     try {
       await withMockedModules(
@@ -192,16 +228,19 @@ describe("Verifier", () => {
           const { Verifier } = await import("../verifier");
           const verifier = new Verifier({
             serverURL: "https://h/v1",
-            configRepo: "o/r"
+            configRepo: "o/r",
           });
 
-          await assert.rejects(() => verifier.verify(), /GitHub API request failed/);
-        },
+          await assert.rejects(
+            () => verifier.verify(),
+            /GitHub API request failed/
+          );
+        }
       );
     } finally {
       (WebAssembly as any).instantiateStreaming = originalInstantiateStreaming;
       (WebAssembly as any).instantiate = originalInstantiate;
-      globalThis.fetch = originalFetch;
+      globalThis.__TINFOIL_TEST_FETCH__ = originalFetch;
     }
   });
 });

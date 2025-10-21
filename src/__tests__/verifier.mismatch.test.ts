@@ -14,9 +14,12 @@ describe("Verifier verify() failure when code attestation mismatches", () => {
     const fetchMock = t.mock.fn(async (input: RequestInfo) => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
-        return new Response(JSON.stringify({ body: `Digest: \`${makeHex64()}\`` }), {
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ body: `Digest: \`${makeHex64()}\`` }),
+          {
+            headers: { "content-type": "application/json" },
+          }
+        );
       }
       // WASM fetch
       return new Response(new Uint8Array([0x00]), {
@@ -26,10 +29,16 @@ describe("Verifier verify() failure when code attestation mismatches", () => {
 
     const originalInstantiateStreaming = WebAssembly.instantiateStreaming;
     const originalInstantiate = WebAssembly.instantiate;
-    const originalFetch = globalThis.fetch;
-    (WebAssembly as any).instantiateStreaming = async () => ({ module: {}, instance: {} });
-    (WebAssembly as any).instantiate = async () => ({ module: {}, instance: {} });
-    globalThis.fetch = fetchMock as any;
+    const originalFetch = globalThis.__TINFOIL_TEST_FETCH__;
+    (WebAssembly as any).instantiateStreaming = async () => ({
+      module: {},
+      instance: {},
+    });
+    (WebAssembly as any).instantiate = async () => ({
+      module: {},
+      instance: {},
+    });
+    globalThis.__TINFOIL_TEST_FETCH__ = fetchMock as any;
 
     try {
       await withMockedModules(
@@ -49,7 +58,10 @@ describe("Verifier verify() failure when code attestation mismatches", () => {
           };
           // Runtime attestation succeeds and returns HPKE key
           (globalThis as any).verifyEnclave = async (_h: string) => ({
-            measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1", "r2"] },
+            measurement: {
+              type: MOCK_MEASUREMENT_TYPE,
+              registers: ["r1", "r2"],
+            },
             tls_public_key: "tls-fp",
             hpke_public_key: "hpke-key",
           });
@@ -64,15 +76,14 @@ describe("Verifier verify() failure when code attestation mismatches", () => {
 
           await assert.rejects(
             () => verifier.verify(),
-            /Verification failed: measurements did not match/,
+            /Verification failed: measurements did not match/
           );
-        },
+        }
       );
     } finally {
       (WebAssembly as any).instantiateStreaming = originalInstantiateStreaming;
       (WebAssembly as any).instantiate = originalInstantiate;
-      globalThis.fetch = originalFetch;
+      globalThis.__TINFOIL_TEST_FETCH__ = originalFetch;
     }
   });
 });
-
