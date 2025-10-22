@@ -3,56 +3,56 @@
   "version": "0.10.0",
   "description": "Tinfoil secure OpenAI client wrapper",
   "main": "dist/index.js",
-  "module": "dist/esm/index.js",
+  "module": "dist/esm/index.mjs",
   "types": "dist/index.d.ts",
   "browser": {
-    "./dist/index.js": "./dist/esm/index.browser.js",
-    "./dist/esm/index.js": "./dist/esm/index.browser.js"
+    "./dist/index.js": "./dist/esm/index.browser.mjs",
+    "./dist/esm/index.mjs": "./dist/esm/index.browser.mjs"
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "browser": "./dist/esm/index.browser.js",
-      "import": "./dist/esm/index.js",
+      "browser": "./dist/esm/index.browser.mjs",
+      "import": "./dist/esm/index.mjs",
       "require": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./client": {
       "types": "./dist/client.d.ts",
-      "import": "./dist/esm/client.js",
+      "import": "./dist/esm/client.mjs",
       "require": "./dist/client.js"
     },
     "./ai-sdk-provider": {
       "types": "./dist/ai-sdk-provider.d.ts",
-      "import": "./dist/esm/ai-sdk-provider.js",
+      "import": "./dist/esm/ai-sdk-provider.mjs",
       "require": "./dist/ai-sdk-provider.js"
     },
     "./verifier": {
       "types": "./dist/verifier.d.ts",
-      "import": "./dist/esm/verifier.js",
+      "import": "./dist/esm/verifier.mjs",
       "require": "./dist/verifier.js"
     },
     "./config": {
       "types": "./dist/config.d.ts",
-      "import": "./dist/esm/config.js",
+      "import": "./dist/esm/config.mjs",
       "require": "./dist/config.js"
     },
     "./secure-client": {
       "types": "./dist/secure-client.d.ts",
-      "import": "./dist/esm/secure-client.js",
+      "import": "./dist/esm/secure-client.mjs",
       "require": "./dist/secure-client.js"
     },
     "./secure-fetch": {
       "types": "./dist/secure-fetch.d.ts",
-      "browser": "./dist/esm/secure-fetch.browser.js",
-      "import": "./dist/esm/secure-fetch.js",
+      "browser": "./dist/esm/secure-fetch.browser.mjs",
+      "import": "./dist/esm/secure-fetch.mjs",
       "require": "./dist/secure-fetch.js"
     }
   },
   "scripts": {
     "build": "npm run build:cjs && npm run build:esm",
     "build:cjs": "tsc && cp src/wasm-exec.js dist/",
-    "build:esm": "tsc -p tsconfig.esm.json && cp src/wasm-exec.js dist/esm/",
+    "build:esm": "tsc -p tsconfig.esm.json && node scripts/convert-to-mjs.js && cp src/wasm-exec.js dist/esm/",
     "test": "bash -lc 'rm -rf dist .node-tests && npm run build:cjs && tsc -p tsconfig.node-test.json && cp src/wasm-exec.js .node-tests/ && node --test $(find .node-tests -name \"*.test.js\" -print)'",
     "lint": "eslint src/**/*.ts",
     "prepublishOnly": "npm run build"
