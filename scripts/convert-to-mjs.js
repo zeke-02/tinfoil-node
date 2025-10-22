@@ -3,14 +3,20 @@
 const fs = require('fs');
 const path = require('path');
 
-const esmDir = path.join(__dirname, '..', 'dist', 'esm');
+const esmDir = path.resolve(__dirname, '..', 'dist', 'esm');
 
 function convertToMjs(dir) {
   const files = fs.readdirSync(dir);
 
   for (const file of files) {
     const filePath = path.join(dir, file);
-    const stat = fs.statSync(filePath);
+    const resolvedPath = path.resolve(filePath);
+
+    if (!resolvedPath.startsWith(esmDir)) {
+      throw new Error(`Path traversal detected: ${resolvedPath} is outside ${esmDir}`);
+    }
+
+    const stat = fs.lstatSync(filePath);
 
     if (stat.isDirectory()) {
       convertToMjs(filePath);
