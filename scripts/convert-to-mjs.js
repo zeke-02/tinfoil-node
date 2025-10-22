@@ -17,32 +17,41 @@ function convertToMjs(dir) {
     } else if (file.endsWith('.js') && !file.endsWith('.mjs')) {
       let content = fs.readFileSync(filePath, 'utf8');
 
-      // Replace .js extensions with .mjs in import statements
+      // Replace .js extensions with .mjs in import/export statements
       // Match: from "./path/to/file.js" -> from "./path/to/file.mjs"
-      content = content.replace(/from\s+(["'])(\.[^"']+?)\.js\1/g, 'from $1$2.mjs$1');
+      content = content.replace(/(from\s+["'])(\.[^"']+?)(\.js)(["'])/g, '$1$2.mjs$4');
 
-      // Match imports without .js extension and add .mjs
+      // Add .mjs to relative imports without any extension
       // Match: from "./path/to/file" -> from "./path/to/file.mjs"
-      content = content.replace(/from\s+(["'])(\.\/[^"']+?)(?<!\.mjs)\1/g, (match, quote, path) => {
-        // Don't add .mjs if it already has an extension
+      content = content.replace(/(from\s+["'])(\.[^"']+?)(["'])/g, (match, prefix, path, suffix) => {
+        // Skip if already has .mjs extension
+        if (path.endsWith('.mjs')) {
+          return match;
+        }
+        // Skip if it has any other extension (like .json, .css, etc)
         if (path.match(/\.\w+$/)) {
           return match;
         }
-        return `from ${quote}${path}.mjs${quote}`;
+        // Add .mjs extension
+        return `${prefix}${path}.mjs${suffix}`;
       });
 
       // Handle dynamic imports with .js extension
       // Match: import("./path/to/file.js") -> import("./path/to/file.mjs")
-      content = content.replace(/import\s*\(\s*(["'])(\.[^"']+?)\.js\1\s*\)/g, 'import($1$2.mjs$1)');
+      content = content.replace(/(import\s*\(\s*["'])(\.[^"']+?)(\.js)(["']\s*\))/g, '$1$2.mjs$4');
 
-      // Handle dynamic imports without extension
-      // Match: import("./path/to/file") -> import("./path/to/file.mjs")
-      content = content.replace(/import\s*\(\s*(["'])(\.\/[^"']+?)(?<!\.mjs)\1\s*\)/g, (match, quote, path) => {
-        // Don't add .mjs if it already has an extension
+      // Add .mjs to dynamic imports without extension
+      content = content.replace(/(import\s*\(\s*["'])(\.[^"']+?)(["']\s*\))/g, (match, prefix, path, suffix) => {
+        // Skip if already has .mjs extension
+        if (path.endsWith('.mjs')) {
+          return match;
+        }
+        // Skip if it has any other extension
         if (path.match(/\.\w+$/)) {
           return match;
         }
-        return `import(${quote}${path}.mjs${quote})`;
+        // Add .mjs extension
+        return `${prefix}${path}.mjs${suffix}`;
       });
 
       const mjsPath = filePath.replace(/\.js$/, '.mjs');
