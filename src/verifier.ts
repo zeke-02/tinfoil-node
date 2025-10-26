@@ -96,6 +96,7 @@ declare const globalThis: {
   Go: any;
   verifyCode: (configRepo: string, digest: string) => Promise<any>;
   verifyEnclave: (host: string) => Promise<any>;
+  verify: (enclaveHost: string, repo: string) => Promise<string>; // performs full verification and returns JSON object
 } & typeof global;
 
 /**
@@ -106,26 +107,29 @@ export interface AttestationMeasurement {
   registers: string[];
 }
 
-// Platform type constants
-// See https://github.com/tinfoilsh/verifier/
-const PLATFORM_TYPES = {
-  SNP_TDX_MULTI_PLATFORM_V1: "https://tinfoil.sh/predicate/snp-tdx-multiplatform/v1",
-  TDX_GUEST_V1: "https://tinfoil.sh/predicate/tdx-guest/v1",
-  TDX_GUEST_V2: "https://tinfoil.sh/predicate/tdx-guest/v2",
-  SEV_GUEST_V1: "https://tinfoil.sh/predicate/sev-snp-guest/v1",
-  SEV_GUEST_V2: "https://tinfoil.sh/predicate/sev-snp-guest/v2",
-  HARDWARE_MEASUREMENTS_V1: "https://tinfoil.sh/predicate/hardware-measurements/v1",
-} as const;
+/**
+ * Hardware measurement from TDX platform verification
+ */
+export interface HardwareMeasurement {
+  ID: string;
+  MRTD: string;
+  RTMR0: string;
+}
 
-const MEASUREMENT_ERROR_MESSAGES = {
-  FORMAT_MISMATCH: "attestation format mismatch",
-  MEASUREMENT_MISMATCH: "measurement mismatch",
-  RTMR1_MISMATCH: "RTMR1 mismatch",
-  RTMR2_MISMATCH: "RTMR2 mismatch",
-  FEW_REGISTERS: "fewer registers than expected",
-  MULTI_PLATFORM_MISMATCH: "multi-platform measurement mismatch",
-  MULTI_PLATFORM_SEV_SNP_MISMATCH: "multi-platform SEV-SNP measurement mismatch",
-} as const;
+/**
+ * Ground truth response from WASM verify() function
+ */
+interface GroundTruth {
+  tls_public_key: string;
+  hpke_public_key: string;
+  digest: string;
+  code_measurement: AttestationMeasurement;
+  enclave_measurement: AttestationMeasurement;
+  hardware_measurement?: HardwareMeasurement;
+  code_fingerprint: string;
+  enclave_fingerprint: string;
+}
+
 
 /**
  * Attestation response containing cryptographic keys and measurements
@@ -155,6 +159,12 @@ export interface VerificationDocument {
   releaseDigest: string;
   codeMeasurement: AttestationMeasurement;
   enclaveMeasurement: AttestationResponse;
+  tlsPublicKey: string;
+  hpkePublicKey: string;
+  hardwareMeasurement?: HardwareMeasurement;
+  codeFingerprint: string;
+  enclaveFingerprint: string;
+  selectedRouterEndpoint: string;
   securityVerified: boolean;
   steps: {
     fetchDigest: VerificationStepState;
@@ -166,119 +176,6 @@ export interface VerificationDocument {
     otherError?: VerificationStepState;
   };
 }
-
-function registersEqual(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  return a.every((value, index) => value === b[index]);
-}
-
-function compareMeasurementsError(
-  codeMeasurement: AttestationMeasurement,
-  runtimeMeasurement: AttestationMeasurement,
-): Error | null {
-  if (
-    codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1 &&
-    runtimeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1
-  ) {
-    if (!registersEqual(codeMeasurement.registers, runtimeMeasurement.registers)) {
-      return new Error(MEASUREMENT_ERROR_MESSAGES.MULTI_PLATFORM_MISMATCH);
-    }
-    return null;
-  }
-
-  if (runtimeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
-    return compareMeasurementsError(runtimeMeasurement, codeMeasurement);
-  }
-
-  if (codeMeasurement.type === PLATFORM_TYPES.SNP_TDX_MULTI_PLATFORM_V1) {
-    switch (runtimeMeasurement.type) {
-      case PLATFORM_TYPES.TDX_GUEST_V1:
-      case PLATFORM_TYPES.TDX_GUEST_V2: {
-        if (codeMeasurement.registers.length < 3 || runtimeMeasurement.registers.length < 4) {
-          return new Error(MEASUREMENT_ERROR_MESSAGES.FEW_REGISTERS);
-        }
-
-        const expectedRtmr1 = codeMeasurement.registers[1];
-        const expectedRtmr2 = codeMeasurement.registers[2];
-        const actualRtmr1 = runtimeMeasurement.registers[2];
-        const actualRtmr2 = runtimeMeasurement.registers[3];
-
-        if (expectedRtmr1 !== actualRtmr1) {
-          return new Error(MEASUREMENT_ERROR_MESSAGES.RTMR1_MISMATCH);
-        }
-        if (expectedRtmr2 !== actualRtmr2) {
-          return new Error(MEASUREMENT_ERROR_MESSAGES.RTMR2_MISMATCH);
-        }
-        return null;
-      }
-
-      case PLATFORM_TYPES.SEV_GUEST_V1:
-      case PLATFORM_TYPES.SEV_GUEST_V2: {
-        if (codeMeasurement.registers.length < 1 || runtimeMeasurement.registers.length < 1) {
-          return new Error(MEASUREMENT_ERROR_MESSAGES.FEW_REGISTERS);
-        }
-
-        const expectedSevSnp = codeMeasurement.registers[0];
-        const actualSevSnp = runtimeMeasurement.registers[0];
-
-        if (expectedSevSnp !== actualSevSnp) {
-          return new Error(MEASUREMENT_ERROR_MESSAGES.MULTI_PLATFORM_SEV_SNP_MISMATCH);
-        }
-        return null;
-      }
-
-      default:
-        return new Error(
-          `unsupported enclave platform for multi-platform code measurements: ${runtimeMeasurement.type}`,
-        );
-    }
-  }
-
-  if (codeMeasurement.type !== runtimeMeasurement.type) {
-    return new Error(MEASUREMENT_ERROR_MESSAGES.FORMAT_MISMATCH);
-  }
-
-  if (!registersEqual(codeMeasurement.registers, runtimeMeasurement.registers)) {
-    return new Error(MEASUREMENT_ERROR_MESSAGES.MEASUREMENT_MISMATCH);
-  }
-
-  return null;
-}
-
-export interface MeasurementComparisonResult {
-  match: boolean;
-  error?: Error;
-}
-
-export function compareMeasurementsDetailed(
-  codeMeasurement: AttestationMeasurement,
-  runtimeMeasurement: AttestationMeasurement,
-): MeasurementComparisonResult {
-  const error = compareMeasurementsError(codeMeasurement, runtimeMeasurement);
-  if (error) {
-    return { match: false, error };
-  }
-  return { match: true };
-}
-
-/**
-* Compare two measurements according to platform-specific rules
-* This is predicate function for comparing attestation measurements
-* taken from https://github.com/tinfoilsh/verifier/blob/main/attestation/attestation.go
-* 
-* @param codeMeasurement - Expected measurement from code attestation
-* @param runtimeMeasurement - Actual measurement from runtime attestation
-* @returns true if measurements match according to platform rules
-*/
-export function compareMeasurements(
-  codeMeasurement: AttestationMeasurement,
-  runtimeMeasurement: AttestationMeasurement,
-): boolean {
-  return compareMeasurementsError(codeMeasurement, runtimeMeasurement) === null;
-}
-
 
 /**
  * Verifier performs attestation verification for Tinfoil enclaves
@@ -584,6 +481,27 @@ export class Verifier {
   }
 
   /**
+   * Save a failed verification document
+   */
+  private saveFailedVerificationDocument(steps: VerificationDocument['steps']): void {
+    this.lastVerificationDocument = {
+      configRepo: this.configRepo,
+      enclaveHost: this.serverURL,
+      releaseDigest: '',
+      codeMeasurement: { type: '', registers: [] },
+      enclaveMeasurement: { measurement: { type: '', registers: [] } },
+      tlsPublicKey: '',
+      hpkePublicKey: '',
+      hardwareMeasurement: undefined,
+      codeFingerprint: '',
+      enclaveFingerprint: '',
+      selectedRouterEndpoint: this.serverURL,
+      securityVerified: false,
+      steps,
+    };
+  }
+
+  /**
    * Internal verification logic that runs within WASM context
    */
   private async verifyInternal(): Promise<AttestationResponse> {
@@ -594,93 +512,69 @@ export class Verifier {
       compareMeasurements: { status: 'pending' },
     };
 
-    let releaseDigest: string;
-    let codeMeasurement: AttestationMeasurement;
-    let attestation: AttestationResponse;
+    if (typeof globalThis.verify !== "function") {
+      steps.fetchDigest = { status: 'failed', error: 'WASM verify function not available' };
+      throw new Error("WASM verify function not available");
+    }
 
+    let groundTruth: GroundTruth;
     try {
-      releaseDigest = await this.fetchLatestDigest(this.configRepo);
+      const groundTruthJSON = await globalThis.verify(this.serverURL, this.configRepo);
+      groundTruth = JSON.parse(groundTruthJSON);
+
+      // Mark all steps as successful since WASM verify() succeeded
       steps.fetchDigest = { status: 'success' };
+      steps.verifyCode = { status: 'success' };
+      steps.verifyEnclave = { status: 'success' };
+      steps.compareMeasurements = { status: 'success' };
     } catch (error) {
-      steps.fetchDigest = { status: 'failed', error: (error as Error).message };
-      this.lastVerificationDocument = {
-        configRepo: this.configRepo,
-        enclaveHost: this.serverURL,
-        releaseDigest: '',
-        codeMeasurement: { type: '', registers: [] },
-        enclaveMeasurement: { measurement: { type: '', registers: [] } },
-        securityVerified: false,
-        steps,
-      };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      if (errorMessage.startsWith('fetchDigest:')) {
+        steps.fetchDigest = { status: 'failed', error: errorMessage };
+      } else if (errorMessage.startsWith('verifyCode:')) {
+        steps.fetchDigest = { status: 'success' };
+        steps.verifyCode = { status: 'failed', error: errorMessage };
+      } else if (errorMessage.startsWith('verifyEnclave:')) {
+        steps.fetchDigest = { status: 'success' };
+        steps.verifyCode = { status: 'success' };
+        steps.verifyEnclave = { status: 'failed', error: errorMessage };
+      } else if (errorMessage.startsWith('verifyHardware:')) {
+        steps.fetchDigest = { status: 'success' };
+        steps.verifyCode = { status: 'success' };
+        steps.verifyEnclave = { status: 'success' };
+        steps.compareMeasurements = { status: 'failed', error: errorMessage };
+      } else if (errorMessage.startsWith('validateTLS:') || errorMessage.startsWith('measurements:')) {
+        steps.fetchDigest = { status: 'success' };
+        steps.verifyCode = { status: 'success' };
+        steps.verifyEnclave = { status: 'success' };
+        steps.compareMeasurements = { status: 'failed', error: errorMessage };
+      } else {
+        steps.otherError = { status: 'failed', error: errorMessage };
+      }
+
+      this.saveFailedVerificationDocument(steps);
       throw error;
     }
 
-    try {
-      const results = await Promise.all([
-        this.verifyCode(this.configRepo, releaseDigest).then(
-          (result) => {
-            steps.verifyCode = { status: 'success' };
-            return result;
-          },
-          (error) => {
-            steps.verifyCode = { status: 'failed', error: (error as Error).message };
-            throw error;
-          }
-        ),
-        this.verifyEnclave(this.serverURL).then(
-          (result) => {
-            steps.verifyEnclave = { status: 'success' };
-            return result;
-          },
-          (error) => {
-            steps.verifyEnclave = { status: 'failed', error: (error as Error).message };
-            throw error;
-          }
-        ),
-      ]);
-
-      codeMeasurement = results[0].measurement;
-      attestation = results[1];
-    } catch (error) {
-      this.lastVerificationDocument = {
-        configRepo: this.configRepo,
-        enclaveHost: this.serverURL,
-        releaseDigest: releaseDigest!,
-        codeMeasurement: codeMeasurement!,
-        enclaveMeasurement: attestation!,
-        securityVerified: false,
-        steps,
-      };
-      throw error;
-    }
-
-    const measurementsMatchError = compareMeasurementsError(codeMeasurement, attestation.measurement);
-
-    if (measurementsMatchError) {
-      steps.compareMeasurements = { status: 'failed', error: measurementsMatchError.message };
-      this.lastVerificationDocument = {
-        configRepo: this.configRepo,
-        enclaveHost: this.serverURL,
-        releaseDigest: releaseDigest,
-        codeMeasurement,
-        enclaveMeasurement: attestation,
-        securityVerified: false,
-        steps,
-      };
-      throw new Error(
-        `Verification failed: measurements did not match.\nCode measurement (${codeMeasurement.type}: ${codeMeasurement.registers})\n` +
-        `Runtime measurement (${attestation.measurement.type}: ${attestation.measurement.registers}:)\n ${measurementsMatchError.message}`
-      );
-    }
-
-    steps.compareMeasurements = { status: 'success' };
+    const attestation: AttestationResponse = {
+      tlsPublicKeyFingerprint: groundTruth.tls_public_key,
+      hpkePublicKey: groundTruth.hpke_public_key,
+      measurement: groundTruth.enclave_measurement,
+    };
 
     this.lastVerificationDocument = {
       configRepo: this.configRepo,
       enclaveHost: this.serverURL,
-      releaseDigest: releaseDigest,
-      codeMeasurement,
+      releaseDigest: groundTruth.digest,
+      codeMeasurement: groundTruth.code_measurement,
       enclaveMeasurement: attestation,
+      tlsPublicKey: groundTruth.tls_public_key,
+      hpkePublicKey: groundTruth.hpke_public_key,
+      hardwareMeasurement: groundTruth.hardware_measurement,
+      codeFingerprint: groundTruth.code_fingerprint,
+      enclaveFingerprint: groundTruth.enclave_fingerprint,
+      selectedRouterEndpoint: this.serverURL,
       securityVerified: true,
       steps,
     };
