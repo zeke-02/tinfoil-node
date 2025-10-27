@@ -46,15 +46,15 @@ describe("Verifier", () => {
               return Promise.resolve();
             }
           };
-          (globalThis as any).verifyEnclave = async (_h: string) => ({
-            measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1", "r2"] },
-            tls_public_key: "tls-fp",
-            hpke_public_key: "hpke-key",
-          });
-          (globalThis as any).verifyCode = async (_r: string, _d: string) =>
+          (globalThis as any).verify = async (_host: string, _repo: string) =>
             JSON.stringify({
-              type: MOCK_MEASUREMENT_TYPE,
-              registers: ["r1", "r2"],
+              tls_public_key: "tls-fp",
+              hpke_public_key: "hpke-key",
+              digest: makeHex64(),
+              code_measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1", "r2"] },
+              enclave_measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1", "r2"] },
+              code_fingerprint: "code-fp",
+              enclave_fingerprint: "enclave-fp",
             });
 
           const { Verifier } = await import("../verifier");
@@ -121,12 +121,18 @@ describe("Verifier", () => {
               return Promise.resolve();
             }
           };
+          (globalThis as any).verify = async (_host: string, _repo: string) =>
+            JSON.stringify({
+              tls_public_key: "tls-fp",
+              hpke_public_key: "hpke-key",
+              digest: makeHex64(),
+              code_measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1"] },
+              enclave_measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1"] },
+              code_fingerprint: "code-fp",
+              enclave_fingerprint: "enclave-fp",
+            });
           (globalThis as any).verifyEnclave = async (_h: string) => ({
             measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["r1"] },
-          });
-          (globalThis as any).verifyCode = async (_r: string, _d: string) => ({
-            type: MOCK_MEASUREMENT_TYPE,
-            registers: ["r1"],
           });
 
           const { Verifier } = await import("../verifier");
@@ -178,6 +184,9 @@ describe("Verifier", () => {
             run() {
               return Promise.resolve();
             }
+          };
+          (globalThis as any).verify = async (_host: string, _repo: string) => {
+            throw new Error("GitHub API request failed");
           };
           (globalThis as any).verifyEnclave = async (_h: string) => ({
             measurement: { type: MOCK_MEASUREMENT_TYPE, registers: ["x"] },
