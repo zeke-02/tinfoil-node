@@ -514,6 +514,7 @@ export class Verifier {
 
     if (typeof globalThis.verify !== "function") {
       steps.fetchDigest = { status: 'failed', error: 'WASM verify function not available' };
+      this.saveFailedVerificationDocument(steps);
       throw new Error("WASM verify function not available");
     }
 
