@@ -42,7 +42,7 @@
  * RUNTIME AND DELIVERY
  * - All verification executes locally via WebAssembly (Go → WASM)
  * - WASM loader: `wasm-exec.js`
- * - WASM module URL: https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm
+ * - WASM module URL: https://tinfoilsh.github.io/verifier/tinfoil-verifier.wasm
  * - Works in Node 20+ and modern browsers with lightweight polyfills for
  *   `performance`, `TextEncoder`/`TextDecoder`, and `crypto.getRandomValues`
  * - Go stdout/stderr is suppressed by default; toggle via `suppressWasmLogs()`
@@ -209,7 +209,7 @@ export class Verifier {
   private static goInstance: any = null;
   private static initializationPromise: Promise<void> | null = null;
   private static readonly defaultWasmUrl =
-    "https://tinfoilsh.github.io/verifier-js/tinfoil-verifier.wasm";
+    "https://tinfoilsh.github.io/verifier/tinfoil-verifier.wasm";
   public static originalFsWriteSync: ((fd: number, buf: Uint8Array) => number) | null = null;
   public static wasmLogsSuppressed = true;
   public static globalsInitialized = false;
