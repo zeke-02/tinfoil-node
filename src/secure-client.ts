@@ -98,13 +98,21 @@ export class SecureClient {
           releaseDigest: '',
           codeMeasurement: { type: '', registers: [] },
           enclaveMeasurement: { measurement: { type: '', registers: [] } },
+          tlsPublicKey: '',
+          hpkePublicKey: '',
+          hardwareMeasurement: undefined,
+          codeFingerprint: '',
+          enclaveFingerprint: '',
+          selectedRouterEndpoint: new URL(this.enclaveURL!).hostname,
           securityVerified: false,
           steps: {
             fetchDigest: { status: 'pending' },
             verifyCode: { status: 'pending' },
             verifyEnclave: { status: 'pending' },
             compareMeasurements: { status: 'pending' },
-            otherError: { status: 'failed', error: (error as Error).message }
+            createTransport: undefined,
+            verifyHPKEKey: undefined,
+            otherError: { status: 'failed', error: (error as Error).message },
           }
         };
       }
