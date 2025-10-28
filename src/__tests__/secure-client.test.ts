@@ -39,7 +39,18 @@ describe("SecureClient", () => {
                   hpkePublicKey: "mock-hpke-public-key",
                   measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 },
-                match: true,
+                tlsPublicKey: "test-tls-public-key",
+                hpkePublicKey: "mock-hpke-public-key",
+                codeFingerprint: "test-code-fingerprint",
+                enclaveFingerprint: "test-enclave-fingerprint",
+                selectedRouterEndpoint: "test.example.com",
+                securityVerified: true,
+                steps: {
+                  fetchDigest: { status: "success" },
+                  verifyCode: { status: "success" },
+                  verifyEnclave: { status: "success" },
+                  compareMeasurements: { status: "success" },
+                },
               };
             }
           },
@@ -104,7 +115,18 @@ describe("SecureClient", () => {
                   hpkePublicKey: "mock-hpke-public-key",
                   measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 },
-                match: true,
+                tlsPublicKey: "test-tls-public-key",
+                hpkePublicKey: "mock-hpke-public-key",
+                codeFingerprint: "test-code-fingerprint",
+                enclaveFingerprint: "test-enclave-fingerprint",
+                selectedRouterEndpoint: "test.example.com",
+                securityVerified: true,
+                steps: {
+                  fetchDigest: { status: "success" },
+                  verifyCode: { status: "success" },
+                  verifyEnclave: { status: "success" },
+                  compareMeasurements: { status: "success" },
+                },
               };
             }
           },
@@ -227,7 +249,18 @@ describe("SecureClient", () => {
                   hpkePublicKey: "mock-hpke-public-key",
                   measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 },
-                match: true,
+                tlsPublicKey: "test-tls-public-key",
+                hpkePublicKey: "mock-hpke-public-key",
+                codeFingerprint: "test-code-fingerprint",
+                enclaveFingerprint: "test-enclave-fingerprint",
+                selectedRouterEndpoint: "test.example.com",
+                securityVerified: true,
+                steps: {
+                  fetchDigest: { status: "success" },
+                  verifyCode: { status: "success" },
+                  verifyEnclave: { status: "success" },
+                  compareMeasurements: { status: "success" },
+                },
               };
             }
           },

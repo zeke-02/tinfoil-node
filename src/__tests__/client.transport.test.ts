@@ -47,14 +47,25 @@ describe("Secure transport integration", () => {
               return {
                 configRepo: "test-repo",
                 enclaveHost: "test-host",
-                digest: "test-digest",
+                releaseDigest: "test-digest",
                 codeMeasurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 enclaveMeasurement: {
                   tlsPublicKeyFingerprint: "fingerprint",
                   hpkePublicKey: "mock-hpke-public-key",
                   measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
                 },
-                match: true,
+                tlsPublicKey: "test-tls-public-key",
+                hpkePublicKey: "mock-hpke-public-key",
+                codeFingerprint: "test-code-fingerprint",
+                enclaveFingerprint: "test-enclave-fingerprint",
+                selectedRouterEndpoint: "test-router.tinfoil.sh",
+                securityVerified: true,
+                steps: {
+                  fetchDigest: { status: "success" },
+                  verifyCode: { status: "success" },
+                  verifyEnclave: { status: "success" },
+                  compareMeasurements: { status: "success" },
+                },
               };
             }
           },
@@ -107,14 +118,25 @@ describe("Secure transport integration", () => {
     const mockVerificationDocument = {
       configRepo: "test-repo",
       enclaveHost: "test-host",
-      digest: "test-digest",
+      releaseDigest: "test-digest",
       codeMeasurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
       enclaveMeasurement: {
         tlsPublicKeyFingerprint: "fingerprint",
         hpkePublicKey: "mock-hpke-public-key",
         measurement: { type: MOCK_MEASUREMENT_TYPE, registers: [] },
       },
-      match: true,
+      tlsPublicKey: "test-tls-public-key",
+      hpkePublicKey: "mock-hpke-public-key",
+      codeFingerprint: "test-code-fingerprint",
+      enclaveFingerprint: "test-enclave-fingerprint",
+      selectedRouterEndpoint: "test-router.tinfoil.sh",
+      securityVerified: true,
+      steps: {
+        fetchDigest: { status: "success" },
+        verifyCode: { status: "success" },
+        verifyEnclave: { status: "success" },
+        compareMeasurements: { status: "success" },
+      },
     };
     
     const createOpenAICompatibleMock = t.mock.fn(
