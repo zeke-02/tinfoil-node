@@ -377,16 +377,16 @@ export class Verifier {
         steps.fetchDigest = { status: 'success' };
         steps.verifyCode = { status: 'success' };
         steps.verifyEnclave = { status: 'failed', error: errorMessage };
-      } else if (errorMessage.startsWith('verifyHardware:')) {
+      } else if (errorMessage.startsWith('measurements:')) {
         steps.fetchDigest = { status: 'success' };
         steps.verifyCode = { status: 'success' };
         steps.verifyEnclave = { status: 'success' };
         steps.compareMeasurements = { status: 'failed', error: errorMessage };
-      } else if (errorMessage.startsWith('validateTLS:') || errorMessage.startsWith('measurements:')) {
+      } else if (errorMessage.startsWith('verifyHardware:') || errorMessage.startsWith('validateTLS:')) {
         steps.fetchDigest = { status: 'success' };
         steps.verifyCode = { status: 'success' };
         steps.verifyEnclave = { status: 'success' };
-        steps.compareMeasurements = { status: 'failed', error: errorMessage };
+        steps.otherError = { status: 'failed', error: errorMessage };
       } else {
         steps.otherError = { status: 'failed', error: errorMessage };
       }
