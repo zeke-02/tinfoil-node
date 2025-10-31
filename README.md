@@ -2,8 +2,9 @@
 
 [![Build Status](https://github.com/tinfoilsh/tinfoil-node/actions/workflows/test.yml/badge.svg)](https://github.com/tinfoilsh/tinfoil-node/actions)
 [![NPM version](https://img.shields.io/npm/v/tinfoil.svg)](https://npmjs.org/package/tinfoil)
+[![Documentation](https://img.shields.io/badge/docs-tinfoil.sh-blue)](https://docs.tinfoil.sh/sdk/node-sdk)
 
-This client library provides secure and convenient access to the Tinfoil Priavate Inference endpoints from TypeScript or JavaScript.
+This client library provides secure and convenient access to the Tinfoil Private Inference endpoints from TypeScript or JavaScript.
 
 It is a wrapper around the OpenAI client that verifies enclave attestation and routes traffic to the Tinfoil Private Inference endpoints through an [EHBP](https://github.com/tinfoilsh/encrypted-http-body-protocol)-secured transport. EHBP encrypts all payloads directly to an attested enclave using [HPKE (RFC 9180)](https://www.rfc-editor.org/rfc/rfc9180.html).
 
@@ -166,6 +167,8 @@ Integration tests are skipped by default to keep the test suite fast and avoid n
 See [examples/README.md](https://github.com/tinfoilsh/tinfoil-node/blob/main/examples/README.md).
 
 ## API Documentation
+
+For complete documentation on using the Tinfoil Node SDK, including advanced examples and API reference, visit the [official documentation](https://docs.tinfoil.sh/sdk/node-sdk).
 
 This library mirrors the official OpenAI Node.js client for common endpoints (e.g., chat, images, embeddings) and types, and is designed to feel familiar. Some less commonly used surfaces may not be fully covered. See the [OpenAI client](https://github.com/openai/openai-node) for complete API usage and documentation.
 
