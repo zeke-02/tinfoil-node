@@ -8,7 +8,11 @@ interface CreateTinfoilAIOptions {
   configRepo?: string;
 }
 
-export async function createTinfoilAI(apiKey: string, options: CreateTinfoilAIOptions = {}) {
+export async function createTinfoilAI(
+  apiKey: string,
+  options: CreateTinfoilAIOptions = {},
+  headers: Record<string, string> = {}
+) {
   const baseURL = options.baseURL;
   const enclaveURL = options.enclaveURL;
   const configRepo = options.configRepo || TINFOIL_CONFIG.INFERENCE_PROXY_REPO;
@@ -32,5 +36,6 @@ export async function createTinfoilAI(apiKey: string, options: CreateTinfoilAIOp
     baseURL: finalBaseURL,
     apiKey: apiKey,
     fetch: secureClient.fetch,
+    headers,
   });
 }
