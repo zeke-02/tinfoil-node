@@ -1,14 +1,11 @@
 {
   "name": "@zeke-02/tinfoil",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Tinfoil secure OpenAI client wrapper for Tauri v2",
   "main": "dist/index.js",
   "module": "dist/esm/index.mjs",
-  "module": "dist/esm/index.mjs",
   "types": "dist/index.d.ts",
   "browser": {
-    "./dist/index.js": "./dist/esm/index.browser.mjs",
-    "./dist/esm/index.mjs": "./dist/esm/index.browser.mjs"
     "./dist/index.js": "./dist/esm/index.browser.mjs",
     "./dist/esm/index.mjs": "./dist/esm/index.browser.mjs"
   },
@@ -17,38 +14,31 @@
       "types": "./dist/index.d.ts",
       "browser": "./dist/esm/index.browser.mjs",
       "import": "./dist/esm/index.mjs",
-      "browser": "./dist/esm/index.browser.mjs",
-      "import": "./dist/esm/index.mjs",
       "require": "./dist/index.js",
       "default": "./dist/esm/index.browser.mjs"
     },
     "./client": {
       "types": "./dist/client.d.ts",
       "import": "./dist/esm/client.mjs",
-      "import": "./dist/esm/client.mjs",
       "require": "./dist/client.js"
     },
     "./ai-sdk-provider": {
       "types": "./dist/ai-sdk-provider.d.ts",
-      "import": "./dist/esm/ai-sdk-provider.mjs",
       "import": "./dist/esm/ai-sdk-provider.mjs",
       "require": "./dist/ai-sdk-provider.js"
     },
     "./verifier": {
       "types": "./dist/verifier.d.ts",
       "import": "./dist/esm/verifier.mjs",
-      "import": "./dist/esm/verifier.mjs",
       "require": "./dist/verifier.js"
     },
     "./config": {
       "types": "./dist/config.d.ts",
       "import": "./dist/esm/config.mjs",
-      "import": "./dist/esm/config.mjs",
       "require": "./dist/config.js"
     },
     "./secure-client": {
       "types": "./dist/secure-client.d.ts",
-      "import": "./dist/esm/secure-client.mjs",
       "import": "./dist/esm/secure-client.mjs",
       "require": "./dist/secure-client.js"
     },
@@ -68,7 +58,6 @@
   "scripts": {
     "build": "npm run build:cjs && npm run build:esm",
     "build:cjs": "tsc && cp src/wasm-exec.js dist/",
-    "build:esm": "tsc -p tsconfig.esm.json && node scripts/convert-to-mjs.js && cp src/wasm-exec.js dist/esm/",
     "build:esm": "tsc -p tsconfig.esm.json && node scripts/convert-to-mjs.js && cp src/wasm-exec.js dist/esm/",
     "test": "bash -lc 'rm -rf dist .node-tests && npm run build:cjs && tsc -p tsconfig.node-test.json && cp src/wasm-exec.js .node-tests/ && node --test $(find .node-tests -name \"*.test.js\" -print)'",
     "lint": "eslint src/**/*.ts",
@@ -97,7 +86,7 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.10",
     "@tauri-apps/plugin-http": "^2.5.2",
-    "@zeke-02/ehbp": "^0.0.1",
+    "@zeke-02/ehbp": "^0.0.2",
     "ai": "^5.0.19",
     "dotenv": "^17.2.1",
     "openai": "^5.13.1",
