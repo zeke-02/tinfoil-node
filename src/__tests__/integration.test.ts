@@ -299,7 +299,7 @@ describe("Examples Integration Tests", () => {
 
     it("SecureClient should initialize correctly when enclaveURL is provided but baseURL is not", async () => {
       const { SecureClient } = await import("../secure-client");
-      
+
       // Create a client with only enclaveURL, no baseURL
       const client = new SecureClient({
         enclaveURL: "https://example-enclave.com"
@@ -312,10 +312,11 @@ describe("Examples Integration Tests", () => {
         await client.ready();
       } catch (error) {
         // Expected to fail during verification, but not due to baseURL being undefined
-        assert.ok((error as Error).message.includes("verify") || (error as Error).message.includes("fetch"), 
+        const message = error && typeof error === 'object' && 'message' in error ? (error as Error).message : String(error);
+        assert.ok(message && (message.includes("verify") || message.includes("fetch") || message.includes("WASM")),
           "Should fail during verification, not baseURL initialization");
       }
-      
+
       // Verify the client is properly created
       assert.ok(client, "Client should be created");
       assert.ok(client.fetch, "Client should have a fetch function");
@@ -339,7 +340,7 @@ describe("Examples Integration Tests", () => {
 
     it("SecureClient should initialize correctly when baseURL is provided but enclaveURL is not", async () => {
       const { SecureClient } = await import("../secure-client");
-      
+
       // Create a client with only baseURL, no enclaveURL
       const client = new SecureClient({
         baseURL: "https://example-api.com/v1/"
@@ -352,10 +353,11 @@ describe("Examples Integration Tests", () => {
         await client.ready();
       } catch (error) {
         // Expected to fail during verification, but not due to enclaveURL being undefined
-        assert.ok((error as Error).message.includes("verify") || (error as Error).message.includes("fetch"), 
+        const message = error && typeof error === 'object' && 'message' in error ? (error as Error).message : String(error);
+        assert.ok(message && (message.includes("verify") || message.includes("fetch") || message.includes("WASM")),
           "Should fail during verification, not enclaveURL initialization");
       }
-      
+
       // Verify the client is properly created
       assert.ok(client, "Client should be created");
       assert.ok(client.fetch, "Client should have a fetch function");

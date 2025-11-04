@@ -2,8 +2,9 @@
 
 [![Build Status](https://github.com/tinfoilsh/tinfoil-node/actions/workflows/test.yml/badge.svg)](https://github.com/tinfoilsh/tinfoil-node/actions)
 [![NPM version](https://img.shields.io/npm/v/tinfoil.svg)](https://npmjs.org/package/tinfoil)
+[![Documentation](https://img.shields.io/badge/docs-tinfoil.sh-blue)](https://docs.tinfoil.sh/sdk/node-sdk)
 
-This client library provides secure and convenient access to the Tinfoil Priavate Inference endpoints from TypeScript or JavaScript.
+This client library provides secure and convenient access to the Tinfoil Private Inference endpoints from TypeScript or JavaScript.
 
 It is a wrapper around the OpenAI client that verifies enclave attestation and routes traffic to the Tinfoil Private Inference endpoints through an [EHBP](https://github.com/tinfoilsh/encrypted-http-body-protocol)-secured transport. EHBP encrypts all payloads directly to an attested enclave using [HPKE (RFC 9180)](https://www.rfc-editor.org/rfc/rfc9180.html).
 
@@ -69,7 +70,7 @@ const completion = await client.chat.completions.create({
 
 ## Verification helpers
 
-This package exposes verification helpers that load the Go-based WebAssembly verifier once per process and provide structured, stepwise attestation results you can use in applications (e.g., to show progress, log transitions, or gate features).
+This package exposes verification helpers that load the Go-based WebAssembly verifier and provide end-to-end attestation with structured, stepwise results you can use in applications (e.g., to show progress, log transitions, or gate features).
 
 The verification functionality is contained in `verifier.ts`.
 
@@ -79,51 +80,62 @@ The verification functionality is contained in `verifier.ts`.
 ```typescript
 import { Verifier } from "tinfoil";
 
-const verifier = new Verifier();
+const verifier = new Verifier({ serverURL: "https://enclave.host.com" });
 
-// Perform runtime attestation
-const runtime = await verifier.verifyEnclave("enclave.host.com");
-// Returns: { measurement: AttestationMeasurement, tlsPublicKeyFingerprint: string, hpkePublicKey: string }
+// Perform full end-to-end verification
+const attestation = await verifier.verify();
+// Returns: AttestationResponse with measurement and cryptographic keys
+// This performs all verification steps atomically:
+// 1. Fetches the latest release digest from GitHub
+// 2. Verifies code provenance using Sigstore
+// 3. Performs runtime attestation against the enclave
+// 4. Verifies hardware measurements (for TDX platforms)
+// 5. Compares code and runtime measurements
 
-// Perform code attestation
-const code = await verifier.verifyCode("tinfoilsh/repo", "digest-hash");
-// Returns: { measurement: AttestationMeasurement }
-
-// Fetch latest digest from GitHub releases
-const digest = await verifier.fetchLatestDigest("tinfoilsh/repo");
+// Access detailed verification results
+const doc = verifier.getVerificationDocument();
+// Returns: VerificationDocument with step-by-step status including
+// measurements, fingerprints, and cryptographic keys
 ```
 
 ### Verification Document
 
-The `SecureClient` provides access to a comprehensive verification document that tracks all verification steps, including failures:
+The `Verifier` provides access to a comprehensive verification document that tracks all verification steps, including failures:
 
 ```typescript
-import { SecureClient } from "tinfoil";
+import { Verifier } from "tinfoil";
 
-const client = new SecureClient();
+const verifier = new Verifier({ serverURL: "https://enclave.host.com" });
 
 try {
-  await client.ready();
-  const response = await client.fetch('https://api.example.com/data');
+  const attestation = await verifier.verify();
+  const doc = verifier.getVerificationDocument();
+  console.log('Security verified:', doc.securityVerified);
+  console.log('TLS fingerprint:', attestation.tlsPublicKeyFingerprint);
+  console.log('HPKE public key:', attestation.hpkePublicKey);
 } catch (error) {
   // Even on error, you can access the verification document
-  const doc = await client.getVerificationDocument();
+  const doc = verifier.getVerificationDocument();
 
   // The document contains detailed step information:
   // - fetchDigest: GitHub release digest retrieval
   // - verifyCode: Code measurement verification
   // - verifyEnclave: Runtime attestation verification
   // - compareMeasurements: Code vs runtime measurement comparison
-  // - createTransport: Transport initialization (optional)
-  // - verifyHPKEKey: HPKE key verification (optional)
   // - otherError: Catch-all for unexpected errors (optional)
-
-  console.log('Security verified:', doc.securityVerified);
 
   // Check individual steps
   if (doc.steps.verifyEnclave.status === 'failed') {
     console.log('Enclave verification failed:', doc.steps.verifyEnclave.error);
   }
+
+  // Error messages are prefixed with the failing step:
+  // - "fetchDigest:" - Failed to fetch GitHub release digest
+  // - "verifyCode:" - Failed to verify code provenance
+  // - "verifyEnclave:" - Failed runtime attestation
+  // - "verifyHardware:" - Failed TDX hardware verification
+  // - "validateTLS:" - TLS public key validation failed
+  // - "measurements:" - Measurement comparison failed
 }
 ```
 
@@ -155,6 +167,8 @@ Integration tests are skipped by default to keep the test suite fast and avoid n
 See [examples/README.md](https://github.com/tinfoilsh/tinfoil-node/blob/main/examples/README.md).
 
 ## API Documentation
+
+For complete documentation on using the Tinfoil Node SDK, including advanced examples and API reference, visit the [official documentation](https://docs.tinfoil.sh/sdk/node-sdk).
 
 This library mirrors the official OpenAI Node.js client for common endpoints (e.g., chat, images, embeddings) and types, and is designed to feel familiar. Some less commonly used surfaces may not be fully covered. See the [OpenAI client](https://github.com/openai/openai-node) for complete API usage and documentation.
 
