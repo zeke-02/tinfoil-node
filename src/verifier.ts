@@ -65,6 +65,7 @@
  * - `suppressWasmLogs(suppress?)` → void - control WASM log output
  */
 import { TINFOIL_CONFIG } from "./config";
+import { getFetch } from "./fetch-adapter";
 
 let cachedTextEncoder: typeof TextEncoder | null = null;
 function getTextEncoder(): typeof TextEncoder {
@@ -227,7 +228,8 @@ export class Verifier {
     const goInstance = new globalThis.Go();
 
     // Load WASM module
-    const wasmResponse = await fetch(Verifier.defaultWasmUrl);
+    const fetchFn = getFetch();
+    const wasmResponse = await fetchFn(Verifier.defaultWasmUrl);
     if (!wasmResponse.ok) {
       throw new Error(
         `Failed to fetch WASM: ${wasmResponse.status} ${wasmResponse.statusText}`
@@ -526,11 +528,11 @@ async function initializeWasmGlobals(): Promise<void> {
   if (!root.performance) {
     root.performance = {
       now: () => Date.now(),
-      markResourceTiming: () => { },
-      mark: () => { },
-      measure: () => { },
-      clearMarks: () => { },
-      clearMeasures: () => { },
+      markResourceTiming: () => {},
+      mark: () => {},
+      measure: () => {},
+      clearMarks: () => {},
+      clearMeasures: () => {},
       getEntriesByName: () => [],
       getEntriesByType: () => [],
       getEntries: () => [],
@@ -538,12 +540,12 @@ async function initializeWasmGlobals(): Promise<void> {
   } else {
     root.performance.now = root.performance.now ?? (() => Date.now());
     root.performance.markResourceTiming =
-      root.performance.markResourceTiming ?? (() => { });
-    root.performance.mark = root.performance.mark ?? (() => { });
-    root.performance.measure = root.performance.measure ?? (() => { });
-    root.performance.clearMarks = root.performance.clearMarks ?? (() => { });
+      root.performance.markResourceTiming ?? (() => {});
+    root.performance.mark = root.performance.mark ?? (() => {});
+    root.performance.measure = root.performance.measure ?? (() => {});
+    root.performance.clearMarks = root.performance.clearMarks ?? (() => {});
     root.performance.clearMeasures =
-      root.performance.clearMeasures ?? (() => { });
+      root.performance.clearMeasures ?? (() => {});
     root.performance.getEntriesByName =
       root.performance.getEntriesByName ?? (() => []);
     root.performance.getEntriesByType =

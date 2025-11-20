@@ -159,7 +159,6 @@ export class SecureClient {
         return await this._fetch!(input, init);
       } catch (error) {
         if (this.verificationDocument) {
-          console.log("secure-client error", error);
           const errorMessage = (error as Error).message;
 
           if (errorMessage.includes("HPKE public key mismatch")) {
