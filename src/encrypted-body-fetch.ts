@@ -1,6 +1,5 @@
 import type { Transport as EhbpTransport } from "@zeke-02/ehbp";
 import { Identity, Transport, PROTOCOL } from "@zeke-02/ehbp";
-import { getFetch } from "./fetch-adapter";
 
 // Public API
 export async function getHPKEKey(enclaveURL: string): Promise<CryptoKey> {
@@ -13,8 +12,7 @@ export async function getHPKEKey(enclaveURL: string): Promise<CryptoKey> {
       `HTTPS is required for remote key retrieval. Invalid protocol: ${keysURL.protocol}`
     );
   }
-  const fetchFn = getFetch();
-  const response = await fetchFn(keysURL.toString());
+  const response = await fetch(keysURL.toString());
 
   if (!response.ok) {
     throw new Error(`Failed to get server public key: ${response.status}`);

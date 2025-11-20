@@ -1,6 +1,6 @@
 {
   "name": "@zeke-02/tinfoil",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Tinfoil secure OpenAI client wrapper for Tauri v2",
   "main": "dist/index.js",
   "module": "dist/esm/index.mjs",
