@@ -1,6 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import { streamText } from "ai";
+import * as fs from "fs";
+import * as path from "path";
 
 const RUN_INTEGRATION = process.env.RUN_TINFOIL_INTEGRATION === "true";
 const SKIP_MESSAGE =
@@ -30,7 +32,7 @@ describe("Examples Integration Tests", () => {
       // Make a simple chat completion request
       const completion = await client.chat.completions.create({
         messages: [{ role: "user", content: "Hello!" }],
-        model: "llama-free",
+        model: "gpt-oss-120b-free",
       });
 
       // Verify the response structure
@@ -73,7 +75,7 @@ describe("Examples Integration Tests", () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-free",
+          model: "gpt-oss-120b-free",
           messages: [{ role: "user", content: "Hello!" }],
         }),
       });
@@ -122,7 +124,7 @@ describe("Examples Integration Tests", () => {
       // Make a simple chat completion request
       const completion = await client.chat.completions.create({
         messages: [{ role: "user", content: "Hello!" }],
-        model: "llama-free",
+        model: "gpt-oss-120b-free",
       });
 
       // Verify the response structure
@@ -165,7 +167,7 @@ describe("Examples Integration Tests", () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-free",
+          model: "gpt-oss-120b-free",
           messages: [{ role: "user", content: "Hello!" }],
         }),
       });
@@ -216,7 +218,7 @@ describe("Examples Integration Tests", () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-free",
+          model: "gpt-oss-120b-free",
           messages: [{ role: "user", content: "Hello!" }],
         }),
       });
@@ -262,7 +264,7 @@ describe("Examples Integration Tests", () => {
           },
           { role: "user", content: "Is this a test?" },
         ],
-        model: "llama-free",
+        model: "gpt-oss-120b-free",
         stream: true,
       });
 
@@ -361,6 +363,32 @@ describe("Examples Integration Tests", () => {
       // Verify the client is properly created
       assert.ok(client, "Client should be created");
       assert.ok(client.fetch, "Client should have a fetch function");
+    });
+  });
+
+  describe("Audio Transcription", () => {
+    it("should transcribe audio using whisper-large-v3-turbo model", async (t) => {
+      if (!RUN_INTEGRATION) {
+        t.skip(SKIP_MESSAGE);
+        return;
+      }
+
+      const { TinfoilAI } = await import("../tinfoilai");
+      const client = new TinfoilAI({ apiKey: "tinfoil" });
+
+      await client.ready();
+
+      const audioPath = path.join(__dirname, "fixtures", "test.mp3");
+      const audioFile = fs.createReadStream(audioPath);
+
+      const transcription = await client.audio.transcriptions.create({
+        model: "whisper-large-v3-turbo",
+        file: audioFile,
+      });
+
+      assert.ok(transcription, "Transcription should be returned");
+      assert.ok(typeof transcription.text === "string", "Transcription should have text field");
+      assert.ok(transcription.text.trim().startsWith("I want to start off by saying"), `Transcription should match expected content, got: "${transcription.text}"`);
     });
   });
 });
