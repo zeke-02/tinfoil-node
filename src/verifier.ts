@@ -89,6 +89,7 @@ function getTextDecoder(): typeof TextDecoder {
   return cachedTextDecoder;
 }
 
+
 const nodeRequire = createNodeRequire();
 let wasmExecLoader: Promise<void> | null = null;
 
